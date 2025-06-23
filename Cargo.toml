@@ -1,0 +1,15 @@
+[package]
+name = "wave_function_collapse"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+pad = {git = "https://github.com/Warhorst/pad.git"}
+rand = "0.8.5"
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "wfc_benchmark"
+harness = false
