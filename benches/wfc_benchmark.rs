@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use wave_function_collapse::{TileConstraints, wave_function_collapse};
+use wave_function_collapse::{PossibleNeighbours, WaveFunctionCollapse};
 use crate::Tile::*;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -12,20 +12,24 @@ enum Tile {
 pub fn benchmark(c: &mut Criterion) {
     c.bench_function("wfc", |b| b.iter(|| {
         let tiles = vec![Water, Sand, Forest];
-        let constraints = TileConstraints::new(
-            &tiles,
-            vec![
-                (Water, Water),
-                (Water, Sand),
-                (Sand, Water),
-                (Sand, Sand),
-                (Sand, Forest),
-                (Forest, Sand),
-                (Forest, Forest),
-            ],
-        );
+        let possible_neighbours = PossibleNeighbours::new([
+            (Water, Water),
+            (Water, Sand),
+            (Sand, Water),
+            (Sand, Sand),
+            (Sand, Forest),
+            (Forest, Sand),
+            (Forest, Forest),
+        ], &tiles);
 
-        wave_function_collapse::<3, Tile>(tiles, 50, 50, constraints, Some(42))
+        WaveFunctionCollapse::<3, Tile>::new(
+            50,
+            50,
+            tiles
+        )
+            .with_constraint(possible_neighbours)
+            .with_seed(42)
+            .collapse();
     }));
 }
 
