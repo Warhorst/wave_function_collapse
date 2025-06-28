@@ -2,10 +2,13 @@ use color_eyre::Result;
 use crossterm::event;
 use crossterm::event::{Event, KeyCode, KeyEventKind};
 use pad::{p, Position};
-use ratatui::prelude::*;
+use ratatui::buffer::Buffer;
+use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::style::Color;
 use ratatui::symbols::border;
-use ratatui::widgets::Block;
-use ratatui::DefaultTerminal;
+use ratatui::text::Line;
+use ratatui::widgets::{Block, List, StatefulWidget, Widget};
+use ratatui::{layout, DefaultTerminal};
 use std::io;
 use wave_function_collapse::{PossibleNeighbours, WaveFunctionCollapse};
 use Tile::*;
@@ -15,8 +18,18 @@ fn main() -> Result<()> {
     let terminal = ratatui::init();
 
     let mut playground = Playground {
-        stopped: false,
-        collapsed: collapse()
+        state: State {
+            stopped: false,
+            selected_screen: SelectedScreen::ControlScreen
+        },
+        result_screen: ResultScreen {
+            collapsed: collapse()
+        },
+        control_screen: ControlScreen {
+            setting_index: 0,
+            width: 0,
+            height: 0,
+        }
     };
 
     let run_result = playground.run(terminal);
@@ -24,16 +37,27 @@ fn main() -> Result<()> {
     Ok(run_result?)
 }
 
-#[derive(Default)]
-struct Playground {
+struct State {
     stopped: bool,
-    collapsed: Vec<(Position, Tile)>
+    selected_screen: SelectedScreen
+}
+
+#[derive(Eq, PartialEq)]
+enum SelectedScreen {
+    ResultScreen,
+    ControlScreen
+}
+
+struct Playground {
+    state: State,
+    result_screen: ResultScreen,
+    control_screen: ControlScreen
 }
 
 impl Playground {
     fn run(&mut self, mut terminal: DefaultTerminal) -> io::Result<()> {
-        while !self.stopped {
-            terminal.draw(|frame| frame.render_widget(&*self, frame.area()))?;
+        while !self.state.stopped {
+            terminal.draw(|frame| frame.render_widget(&mut *self, frame.area()))?;
             self.handle_events()?;
         }
 
@@ -45,7 +69,13 @@ impl Playground {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
                 match key_event.code {
                     KeyCode::Char('q') => {
-                        self.stopped = true;
+                        self.state.stopped = true;
+                    },
+                    KeyCode::Char('c') => {
+                        self.state.selected_screen = SelectedScreen::ControlScreen
+                    },
+                    KeyCode::Char('r') => {
+                        self.state.selected_screen = SelectedScreen::ResultScreen
                     }
                     _ => {}
                 }
@@ -56,13 +86,34 @@ impl Playground {
     }
 }
 
-impl Widget for &Playground {
+impl Widget for &mut Playground {
     fn render(self, area: Rect, buf: &mut Buffer) where Self: Sized {
-        let title = Line::from("WFC Playground".bold());
+        let chunks = Layout::horizontal([
+            Constraint::Percentage(75),
+            Constraint::Percentage(25),
+        ]).split(area);
 
+        self.result_screen.render(chunks[0], buf, &mut self.state);
+        self.control_screen.render(chunks[1], buf, &mut self.state);
+    }
+}
+
+struct ResultScreen {
+    collapsed: Vec<(Position, Tile)>
+}
+
+impl StatefulWidget for &ResultScreen {
+    type State = State;
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) where Self: Sized {
+        let border_set = if let SelectedScreen::ResultScreen = state.selected_screen {
+            border::THICK
+        } else {
+            border::PLAIN
+        };
         let block = Block::bordered()
-            .title(title.centered())
-            .border_set(border::THICK);
+            .title(Line::from(" WFC Result <r> ").centered())
+            .border_set(border_set);
 
         let inner = block.inner(area);
 
@@ -80,6 +131,39 @@ impl Widget for &Playground {
                 }
             }
         }
+    }
+}
+
+struct ControlScreen {
+    /// The index of the setting currently selected
+    setting_index: usize,
+    width: usize,
+    height: usize
+}
+
+impl StatefulWidget for &ControlScreen {
+    type State = State;
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) where Self: Sized {
+        let border_set = if let SelectedScreen::ControlScreen = state.selected_screen {
+            border::THICK
+        } else {
+            border::PLAIN
+        };
+        let block = Block::bordered()
+            .title(" Control Panel <c> ")
+            .border_set(border_set);
+        let inner = block.inner(area);
+
+        block.render(area, buf);
+
+        let list = List::new([
+            "Foo",
+            "Bar",
+            "Baz"
+        ]);
+
+        Widget::render(list, inner, buf);
     }
 }
 
