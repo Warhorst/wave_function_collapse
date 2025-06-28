@@ -13,26 +13,21 @@ use std::io;
 use wave_function_collapse::{PossibleNeighbours, WaveFunctionCollapse};
 use Tile::*;
 
+/// Index of the settings row representing the width value
+const WIDTH_INDEX: usize = 0;
+/// Index of the settings row representing the height value
+const HEIGHT_INDEX: usize = 1;
+
 fn main() -> Result<()> {
     color_eyre::install()?;
     let terminal = ratatui::init();
 
-    let mut ts = TableState::default();
-    ts.select(Some(0));
-
     let mut playground = Playground {
-        state: State {
-            stopped: false,
-            selected_screen: SelectedScreen::ControlScreen,
-            table_state: ts
-        },
+        state: State::default(),
         result_screen: ResultScreen {
             collapsed: collapse()
         },
-        control_screen: ControlScreen {
-            width: 0,
-            height: 0,
-        }
+        control_screen: ControlScreen
     };
 
     let run_result = playground.run(terminal);
@@ -40,11 +35,40 @@ fn main() -> Result<()> {
     Ok(run_result?)
 }
 
-// todo create sub states for the screens
 struct State {
     stopped: bool,
     selected_screen: SelectedScreen,
-    table_state: TableState
+    settings: Settings,
+    settings_table: TableState,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        let mut table_state = TableState::new();
+        table_state.select(Some(1));
+
+        State {
+            stopped: false,
+            selected_screen: SelectedScreen::ControlScreen,
+            settings: Settings::default(),
+            settings_table: table_state
+        }
+    }
+}
+
+/// Settings for the wave function collapse which will be executed in the playground
+struct Settings {
+    width: usize,
+    height: usize
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            width: 20,
+            height: 20
+        }
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -77,18 +101,36 @@ impl Playground {
                         self.state.stopped = true;
                     },
                     (KeyCode::Char('c'), SelectedScreen::ResultScreen) => {
-                        self.state.table_state.select(Some(0));
+                        self.state.settings_table.select(Some(0));
                         self.state.selected_screen = SelectedScreen::ControlScreen
                     },
                     (KeyCode::Char('r'), SelectedScreen::ControlScreen) => {
-                        self.state.table_state.select(None);
+                        self.state.settings_table.select(None);
                         self.state.selected_screen = SelectedScreen::ResultScreen
                     },
                     (KeyCode::Up, SelectedScreen::ControlScreen) => {
-                        self.state.table_state.scroll_up_by(1)
+                        self.state.settings_table.select_previous();
                     },
                     (KeyCode::Down, SelectedScreen::ControlScreen) => {
-                        self.state.table_state.scroll_down_by(1);
+                        self.state.settings_table.select_next();
+                    },
+                    (KeyCode::Right, SelectedScreen::ControlScreen) => {
+                        if let Some(index) = self.state.settings_table.selected() {
+                            match index {
+                                WIDTH_INDEX => self.state.settings.width += 1,
+                                HEIGHT_INDEX => self.state.settings.height += 1,
+                                _ => {}
+                            }
+                        }
+                    },
+                    (KeyCode::Left, SelectedScreen::ControlScreen) => {
+                        if let Some(index) = self.state.settings_table.selected() {
+                            match index {
+                                WIDTH_INDEX => self.state.settings.width = self.state.settings.width.saturating_sub(1),
+                                HEIGHT_INDEX => self.state.settings.height = self.state.settings.height.saturating_sub(1),
+                                _ => {}
+                            }
+                        }
                     },
                     _ => {}
                 }
@@ -147,12 +189,7 @@ impl StatefulWidget for &ResultScreen {
     }
 }
 
-// todo move to super state
-struct ControlScreen {
-    /// The index of the setting currently selected
-    width: usize,
-    height: usize
-}
+struct ControlScreen;
 
 impl StatefulWidget for &ControlScreen {
     type State = State;
@@ -171,8 +208,8 @@ impl StatefulWidget for &ControlScreen {
         block.render(area, buf);
 
         let rows = [
-            Row::new(vec!["Width".to_string(), format!("{}", self.width)]),
-            Row::new(vec!["Height".to_string(), format!("{}", self.height)])
+            Row::new(vec!["Width".to_string(), format!("{}", state.settings.width)]),
+            Row::new(vec!["Height".to_string(), format!("{}", state.settings.height)])
         ];
         let widths = [
             Constraint::Percentage(50),
@@ -182,7 +219,7 @@ impl StatefulWidget for &ControlScreen {
             .row_highlight_style(Style::new().reversed())
             .highlight_symbol(">");
 
-        StatefulWidget::render(table, inner, buf, &mut state.table_state);
+        StatefulWidget::render(table, inner, buf, &mut state.settings_table);
     }
 }
 
