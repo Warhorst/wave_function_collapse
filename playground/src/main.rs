@@ -7,7 +7,7 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::symbols::border;
 use ratatui::text::Line;
-use ratatui::widgets::{Block, Paragraph, Row, StatefulWidget, Table, TableState, Widget};
+use ratatui::widgets::{Block, List, Row, StatefulWidget, Table, TableState, Widget};
 use ratatui::{layout, DefaultTerminal};
 use std::io;
 use wave_function_collapse::{PossibleNeighbours, WaveFunctionCollapse};
@@ -168,9 +168,19 @@ impl StatefulWidget for ControlsPanel {
             .title(" Controls ")
             .border_set(border::DOUBLE);
 
-        Paragraph::new(" <c> Collapse with current settings | <q> Quit")
-            .block(block)
-            .render(area, buf);
+        let items = vec![
+            " <c> Collapse with current settings | <q> Quit ".to_string(),
+            match state.selected_panel {
+                SelectedPanel::Result => "".to_string(),
+                SelectedPanel::Settings => " <↓, ↑> Select setting | <←, →> Decrease / Increase value ".to_string()
+            }
+        ];
+
+        Widget::render(
+            List::new(items).block(block),
+            area,
+            buf
+        )
     }
 }
 
