@@ -7,7 +7,7 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::symbols::border;
 use ratatui::text::Line;
-use ratatui::widgets::{Block, Row, StatefulWidget, Table, TableState, Widget};
+use ratatui::widgets::{Block, Paragraph, Row, StatefulWidget, Table, TableState, Widget};
 use ratatui::{layout, DefaultTerminal};
 use std::io;
 use wave_function_collapse::{PossibleNeighbours, WaveFunctionCollapse};
@@ -22,13 +22,7 @@ fn main() -> Result<()> {
     color_eyre::install()?;
     let terminal = ratatui::init();
 
-    let mut playground = Playground {
-        state: State::default(),
-        result_panel: ResultPanel {
-            collapsed: collapse()
-        },
-        settings_panel: SettingsPanel
-    };
+    let mut playground = Playground::default();
 
     let run_result = playground.run(terminal);
     ratatui::restore();
@@ -39,6 +33,7 @@ struct State {
     stopped: bool,
     selected_panel: SelectedPanel,
     settings: Settings,
+    collapsed: Vec<(Position, Tile)>,
     settings_table: TableState,
 }
 
@@ -51,6 +46,7 @@ impl Default for State {
             stopped: false,
             selected_panel: SelectedPanel::Settings,
             settings: Settings::default(),
+            collapsed: vec![],
             settings_table: table_state
         }
     }
@@ -77,10 +73,9 @@ enum SelectedPanel {
     Settings
 }
 
+#[derive(Default)]
 struct Playground {
     state: State,
-    result_panel: ResultPanel,
-    settings_panel: SettingsPanel
 }
 
 impl Playground {
@@ -99,6 +94,9 @@ impl Playground {
                 match (key_event.code, self.state.selected_panel) {
                     (KeyCode::Char('q'), _) => {
                         self.state.stopped = true;
+                    },
+                    (KeyCode::Char('c'), _) => {
+                        self.state.collapsed = collapse(&self.state.settings);
                     },
                     (KeyCode::Char('s'), SelectedPanel::Result) => {
                         self.state.settings_table.select(Some(0));
@@ -143,19 +141,40 @@ impl Playground {
 
 impl Widget for &mut Playground {
     fn render(self, area: Rect, buf: &mut Buffer) where Self: Sized {
-        let chunks = Layout::horizontal([
-            Constraint::Percentage(75),
-            Constraint::Percentage(25),
+        let vert_chunks = Layout::vertical([
+            Constraint::Length(4),
+            Constraint::Fill(1)
         ]).split(area);
 
-        self.result_panel.render(chunks[0], buf, &mut self.state);
-        self.settings_panel.render(chunks[1], buf, &mut self.state);
+        let hor_chunks = Layout::horizontal([
+            Constraint::Percentage(75),
+            Constraint::Percentage(25),
+        ]).split(vert_chunks[1]);
+
+        ControlsPanel.render(vert_chunks[0], buf, &mut self.state);
+        ResultPanel.render(hor_chunks[0], buf, &mut self.state);
+        SettingsPanel.render(hor_chunks[1], buf, &mut self.state);
     }
 }
 
-struct ResultPanel {
-    collapsed: Vec<(Position, Tile)>
+/// Panel which shows the controls of the playground
+struct ControlsPanel;
+
+impl StatefulWidget for ControlsPanel {
+    type State = State;
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        let block = Block::bordered()
+            .title(" Controls ")
+            .border_set(border::DOUBLE);
+
+        Paragraph::new(" <c> Collapse with current settings | <q> Quit")
+            .block(block)
+            .render(area, buf);
+    }
 }
+
+struct ResultPanel;
 
 impl StatefulWidget for &ResultPanel {
     type State = State;
@@ -174,7 +193,7 @@ impl StatefulWidget for &ResultPanel {
 
         block.render(area, buf);
 
-        let mut sorted = self.collapsed.clone();
+        let mut sorted = state.collapsed.clone();
         sorted.sort_by(|(pos_a, _), (pos_b, _)| pos_a.cmp(pos_b));
 
         for (xi, x) in (inner.left()..inner.right()).enumerate() {
@@ -248,7 +267,9 @@ impl Tile {
     }
 }
 
-fn collapse() -> Vec<(Position, Tile)> {
+fn collapse(
+    settings: &Settings
+) -> Vec<(Position, Tile)> {
     let tiles = vec![Water, Sand, Forest];
     let possible_neighbours = PossibleNeighbours::new([
           (Water, Water),
@@ -261,8 +282,8 @@ fn collapse() -> Vec<(Position, Tile)> {
     ], &tiles);
 
     WaveFunctionCollapse::<3, Tile>::new(
-        20,
-        20,
+        settings.width,
+        settings.height,
         tiles,
     )
         .with_constraint(possible_neighbours)
