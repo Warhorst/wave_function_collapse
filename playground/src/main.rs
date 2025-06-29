@@ -24,10 +24,10 @@ fn main() -> Result<()> {
 
     let mut playground = Playground {
         state: State::default(),
-        result_screen: ResultScreen {
+        result_panel: ResultPanel {
             collapsed: collapse()
         },
-        control_screen: ControlScreen
+        settings_panel: SettingsPanel
     };
 
     let run_result = playground.run(terminal);
@@ -37,7 +37,7 @@ fn main() -> Result<()> {
 
 struct State {
     stopped: bool,
-    selected_screen: SelectedScreen,
+    selected_panel: SelectedPanel,
     settings: Settings,
     settings_table: TableState,
 }
@@ -45,11 +45,11 @@ struct State {
 impl Default for State {
     fn default() -> Self {
         let mut table_state = TableState::new();
-        table_state.select(Some(1));
+        table_state.select(Some(0));
 
         State {
             stopped: false,
-            selected_screen: SelectedScreen::ControlScreen,
+            selected_panel: SelectedPanel::Settings,
             settings: Settings::default(),
             settings_table: table_state
         }
@@ -72,15 +72,15 @@ impl Default for Settings {
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
-enum SelectedScreen {
-    ResultScreen,
-    ControlScreen
+enum SelectedPanel {
+    Result,
+    Settings
 }
 
 struct Playground {
     state: State,
-    result_screen: ResultScreen,
-    control_screen: ControlScreen
+    result_panel: ResultPanel,
+    settings_panel: SettingsPanel
 }
 
 impl Playground {
@@ -96,25 +96,25 @@ impl Playground {
     fn handle_events(&mut self) -> io::Result<()> {
         match event::read()? {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                match (key_event.code, self.state.selected_screen) {
+                match (key_event.code, self.state.selected_panel) {
                     (KeyCode::Char('q'), _) => {
                         self.state.stopped = true;
                     },
-                    (KeyCode::Char('c'), SelectedScreen::ResultScreen) => {
+                    (KeyCode::Char('s'), SelectedPanel::Result) => {
                         self.state.settings_table.select(Some(0));
-                        self.state.selected_screen = SelectedScreen::ControlScreen
+                        self.state.selected_panel = SelectedPanel::Settings
                     },
-                    (KeyCode::Char('r'), SelectedScreen::ControlScreen) => {
+                    (KeyCode::Char('r'), SelectedPanel::Settings) => {
                         self.state.settings_table.select(None);
-                        self.state.selected_screen = SelectedScreen::ResultScreen
+                        self.state.selected_panel = SelectedPanel::Result
                     },
-                    (KeyCode::Up, SelectedScreen::ControlScreen) => {
+                    (KeyCode::Up, SelectedPanel::Settings) => {
                         self.state.settings_table.select_previous();
                     },
-                    (KeyCode::Down, SelectedScreen::ControlScreen) => {
+                    (KeyCode::Down, SelectedPanel::Settings) => {
                         self.state.settings_table.select_next();
                     },
-                    (KeyCode::Right, SelectedScreen::ControlScreen) => {
+                    (KeyCode::Right, SelectedPanel::Settings) => {
                         if let Some(index) = self.state.settings_table.selected() {
                             match index {
                                 WIDTH_INDEX => self.state.settings.width += 1,
@@ -123,7 +123,7 @@ impl Playground {
                             }
                         }
                     },
-                    (KeyCode::Left, SelectedScreen::ControlScreen) => {
+                    (KeyCode::Left, SelectedPanel::Settings) => {
                         if let Some(index) = self.state.settings_table.selected() {
                             match index {
                                 WIDTH_INDEX => self.state.settings.width = self.state.settings.width.saturating_sub(1),
@@ -148,20 +148,20 @@ impl Widget for &mut Playground {
             Constraint::Percentage(25),
         ]).split(area);
 
-        self.result_screen.render(chunks[0], buf, &mut self.state);
-        self.control_screen.render(chunks[1], buf, &mut self.state);
+        self.result_panel.render(chunks[0], buf, &mut self.state);
+        self.settings_panel.render(chunks[1], buf, &mut self.state);
     }
 }
 
-struct ResultScreen {
+struct ResultPanel {
     collapsed: Vec<(Position, Tile)>
 }
 
-impl StatefulWidget for &ResultScreen {
+impl StatefulWidget for &ResultPanel {
     type State = State;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) where Self: Sized {
-        let border_set = if let SelectedScreen::ResultScreen = state.selected_screen {
+        let border_set = if let SelectedPanel::Result = state.selected_panel {
             border::THICK
         } else {
             border::PLAIN
@@ -189,19 +189,19 @@ impl StatefulWidget for &ResultScreen {
     }
 }
 
-struct ControlScreen;
+struct SettingsPanel;
 
-impl StatefulWidget for &ControlScreen {
+impl StatefulWidget for &SettingsPanel {
     type State = State;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) where Self: Sized {
-        let border_set = if let SelectedScreen::ControlScreen = state.selected_screen {
+        let border_set = if let SelectedPanel::Settings = state.selected_panel {
             border::THICK
         } else {
             border::PLAIN
         };
         let block = Block::bordered()
-            .title(" Control Panel <c> ")
+            .title(" Settings <s> ")
             .border_set(border_set);
         let inner = block.inner(area);
 
