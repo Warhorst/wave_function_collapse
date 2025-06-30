@@ -29,25 +29,130 @@ fn main() -> Result<()> {
     Ok(run_result?)
 }
 
+#[derive(Default)]
 struct State {
     stopped: bool,
-    selected_panel: SelectedPanel,
-    settings: Settings,
-    collapsed: Vec<(Position, Tile)>,
-    settings_table: TableState,
+    result_panel_state: ResultPanelState,
+    settings_panel_state: SettingsPanelState
 }
 
-impl Default for State {
+impl State {
+    fn handle_key_input(&mut self, key_code: KeyCode) -> io::Result<()> {
+        match key_code {
+            KeyCode::Char('q') => {
+                self.stopped = true
+            },
+            KeyCode::Char('c') => {
+                self.result_panel_state.collapse(&self.settings_panel_state.settings);
+            },
+            KeyCode::Char('s') if !self.settings_panel_state.selected => {
+                self.settings_panel_state.select();
+                self.result_panel_state.deselect();
+            },
+            KeyCode::Char('r') if !self.result_panel_state.selected => {
+                self.result_panel_state.select();
+                self.settings_panel_state.deselect();
+            },
+            _ => {}
+        }
+
+        self.settings_panel_state.handle_key_inputs(key_code)?;
+
+        Ok(())
+    }
+}
+
+struct ResultPanelState {
+    selected: bool,
+    collapsed: Vec<(Position, Tile)>
+}
+
+impl ResultPanelState {
+    fn select(&mut self) {
+        self.selected = true;
+    }
+
+    fn deselect(&mut self) {
+        self.selected = false;
+    }
+
+    fn collapse(&mut self, settings: &Settings) {
+        self.collapsed = collapse(settings)
+    }
+}
+
+impl Default for ResultPanelState {
+    fn default() -> Self {
+        ResultPanelState {
+            selected: false,
+            collapsed: vec![]
+        }
+    }
+}
+
+struct SettingsPanelState {
+    selected: bool,
+    settings: Settings,
+    table_state: TableState
+}
+
+impl SettingsPanelState {
+    fn handle_key_inputs(&mut self, key_code: KeyCode) -> io::Result<()> {
+        if !self.selected {
+            return Ok(())
+        }
+
+        match key_code {
+            KeyCode::Up => {
+                self.table_state.select_previous();
+            },
+            KeyCode::Down => {
+                self.table_state.select_next()
+            },
+            KeyCode::Right => {
+                if let Some(index) = self.table_state.selected() {
+                    match index {
+                        WIDTH_INDEX => self.settings.width += 1,
+                        HEIGHT_INDEX => self.settings.height += 1,
+                        _ => {}
+                    }
+                }
+            },
+            KeyCode::Left => {
+                if let Some(index) = self.table_state.selected() {
+                    match index {
+                        WIDTH_INDEX => self.settings.width = self.settings.width.saturating_sub(1),
+                        HEIGHT_INDEX => self.settings.height = self.settings.height.saturating_sub(1),
+                        _ => {}
+                    }
+                }
+            },
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    fn select(&mut self) {
+        self.selected = true;
+        self.table_state.select(Some(0));
+    }
+
+    fn deselect(&mut self) {
+        self.selected = false;
+        self.table_state.select(None)
+    }
+}
+
+impl Default for SettingsPanelState {
     fn default() -> Self {
         let mut table_state = TableState::new();
         table_state.select(Some(0));
 
-        State {
-            stopped: false,
-            selected_panel: SelectedPanel::Settings,
+        SettingsPanelState {
+            selected: true,
             settings: Settings::default(),
-            collapsed: vec![],
-            settings_table: table_state
+            table_state
         }
     }
 }
@@ -67,12 +172,6 @@ impl Default for Settings {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum SelectedPanel {
-    Result,
-    Settings
-}
-
 #[derive(Default)]
 struct Playground {
     state: State,
@@ -89,52 +188,10 @@ impl Playground {
     }
 
     fn handle_events(&mut self) -> io::Result<()> {
-        match event::read()? {
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                match (key_event.code, self.state.selected_panel) {
-                    (KeyCode::Char('q'), _) => {
-                        self.state.stopped = true;
-                    },
-                    (KeyCode::Char('c'), _) => {
-                        self.state.collapsed = collapse(&self.state.settings);
-                    },
-                    (KeyCode::Char('s'), SelectedPanel::Result) => {
-                        self.state.settings_table.select(Some(0));
-                        self.state.selected_panel = SelectedPanel::Settings
-                    },
-                    (KeyCode::Char('r'), SelectedPanel::Settings) => {
-                        self.state.settings_table.select(None);
-                        self.state.selected_panel = SelectedPanel::Result
-                    },
-                    (KeyCode::Up, SelectedPanel::Settings) => {
-                        self.state.settings_table.select_previous();
-                    },
-                    (KeyCode::Down, SelectedPanel::Settings) => {
-                        self.state.settings_table.select_next();
-                    },
-                    (KeyCode::Right, SelectedPanel::Settings) => {
-                        if let Some(index) = self.state.settings_table.selected() {
-                            match index {
-                                WIDTH_INDEX => self.state.settings.width += 1,
-                                HEIGHT_INDEX => self.state.settings.height += 1,
-                                _ => {}
-                            }
-                        }
-                    },
-                    (KeyCode::Left, SelectedPanel::Settings) => {
-                        if let Some(index) = self.state.settings_table.selected() {
-                            match index {
-                                WIDTH_INDEX => self.state.settings.width = self.state.settings.width.saturating_sub(1),
-                                HEIGHT_INDEX => self.state.settings.height = self.state.settings.height.saturating_sub(1),
-                                _ => {}
-                            }
-                        }
-                    },
-                    _ => {}
-                }
-            }
-            _ => {}
-        };
+        if let Event::Key(key_event) = event::read()? && key_event.kind == KeyEventKind::Press {
+            self.state.handle_key_input(key_event.code)?;
+        }
+
         Ok(())
     }
 }
@@ -152,8 +209,8 @@ impl Widget for &mut Playground {
         ]).split(vert_chunks[1]);
 
         ControlsPanel.render(vert_chunks[0], buf, &mut self.state);
-        ResultPanel.render(hor_chunks[0], buf, &mut self.state);
-        SettingsPanel.render(hor_chunks[1], buf, &mut self.state);
+        ResultPanel.render(hor_chunks[0], buf, &mut self.state.result_panel_state);
+        SettingsPanel.render(hor_chunks[1], buf, &mut self.state.settings_panel_state);
     }
 }
 
@@ -170,9 +227,9 @@ impl StatefulWidget for ControlsPanel {
 
         let items = vec![
             " <c> Collapse with current settings | <q> Quit ".to_string(),
-            match state.selected_panel {
-                SelectedPanel::Result => "".to_string(),
-                SelectedPanel::Settings => " <↓, ↑> Select setting | <←, →> Decrease / Increase value ".to_string()
+            match state.result_panel_state.selected {
+                true => "".to_string(),
+                false => " <↓, ↑> Select setting | <←, →> Decrease / Increase value ".to_string()
             }
         ];
 
@@ -187,10 +244,10 @@ impl StatefulWidget for ControlsPanel {
 struct ResultPanel;
 
 impl StatefulWidget for &ResultPanel {
-    type State = State;
+    type State = ResultPanelState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) where Self: Sized {
-        let border_set = if let SelectedPanel::Result = state.selected_panel {
+        let border_set = if state.selected {
             border::THICK
         } else {
             border::PLAIN
@@ -221,10 +278,10 @@ impl StatefulWidget for &ResultPanel {
 struct SettingsPanel;
 
 impl StatefulWidget for &SettingsPanel {
-    type State = State;
+    type State = SettingsPanelState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) where Self: Sized {
-        let border_set = if let SelectedPanel::Settings = state.selected_panel {
+        let border_set = if state.selected {
             border::THICK
         } else {
             border::PLAIN
@@ -248,7 +305,7 @@ impl StatefulWidget for &SettingsPanel {
             .row_highlight_style(Style::new().reversed())
             .highlight_symbol(">");
 
-        StatefulWidget::render(table, inner, buf, &mut state.settings_table);
+        StatefulWidget::render(table, inner, buf, &mut state.table_state);
     }
 }
 
