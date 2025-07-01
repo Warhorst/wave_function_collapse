@@ -1,22 +1,24 @@
+mod weights_dialog;
+mod result_panel;
+mod settings_panel;
+mod controls_panel;
+
+use crate::controls_panel::*;
+use crate::result_panel::*;
+use crate::settings_panel::*;
+use crate::weights_dialog::*;
 use color_eyre::Result;
 use crossterm::event;
 use crossterm::event::{Event, KeyCode, KeyEventKind};
-use pad::{p, Position};
+use pad::Position;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Color, Style, Stylize};
-use ratatui::symbols::border;
-use ratatui::text::Line;
-use ratatui::widgets::{Block, List, Row, StatefulWidget, Table, TableState, Widget};
-use ratatui::{layout, DefaultTerminal};
+use ratatui::style::Color;
+use ratatui::widgets::{StatefulWidget, Widget};
+use ratatui::DefaultTerminal;
 use std::io;
 use wave_function_collapse::{PossibleNeighbours, WaveFunctionCollapse};
 use Tile::*;
-
-/// Index of the settings row representing the width value
-const WIDTH_INDEX: usize = 0;
-/// Index of the settings row representing the height value
-const HEIGHT_INDEX: usize = 1;
 
 fn main() -> Result<()> {
     color_eyre::install()?;
@@ -30,144 +32,27 @@ fn main() -> Result<()> {
 }
 
 #[derive(Default)]
-struct State {
+pub struct State {
     stopped: bool,
-    result_panel_state: ResultPanelState,
-    settings_panel_state: SettingsPanelState
-}
-
-impl State {
-    fn handle_key_input(&mut self, key_code: KeyCode) -> io::Result<()> {
-        match key_code {
-            KeyCode::Char('q') => {
-                self.stopped = true
-            },
-            KeyCode::Char('c') => {
-                self.result_panel_state.collapse(&self.settings_panel_state.settings);
-            },
-            KeyCode::Char('s') if !self.settings_panel_state.selected => {
-                self.settings_panel_state.select();
-                self.result_panel_state.deselect();
-            },
-            KeyCode::Char('r') if !self.result_panel_state.selected => {
-                self.result_panel_state.select();
-                self.settings_panel_state.deselect();
-            },
-            _ => {}
-        }
-
-        self.settings_panel_state.handle_key_inputs(key_code)?;
-
-        Ok(())
-    }
-}
-
-struct ResultPanelState {
-    selected: bool,
-    collapsed: Vec<(Position, Tile)>
-}
-
-impl ResultPanelState {
-    fn select(&mut self) {
-        self.selected = true;
-    }
-
-    fn deselect(&mut self) {
-        self.selected = false;
-    }
-
-    fn collapse(&mut self, settings: &Settings) {
-        self.collapsed = collapse(settings)
-    }
-}
-
-impl Default for ResultPanelState {
-    fn default() -> Self {
-        ResultPanelState {
-            selected: false,
-            collapsed: vec![]
-        }
-    }
-}
-
-struct SettingsPanelState {
-    selected: bool,
     settings: Settings,
-    table_state: TableState
-}
-
-impl SettingsPanelState {
-    fn handle_key_inputs(&mut self, key_code: KeyCode) -> io::Result<()> {
-        if !self.selected {
-            return Ok(())
-        }
-
-        match key_code {
-            KeyCode::Up => {
-                self.table_state.select_previous();
-            },
-            KeyCode::Down => {
-                self.table_state.select_next()
-            },
-            KeyCode::Right => {
-                if let Some(index) = self.table_state.selected() {
-                    match index {
-                        WIDTH_INDEX => self.settings.width += 1,
-                        HEIGHT_INDEX => self.settings.height += 1,
-                        _ => {}
-                    }
-                }
-            },
-            KeyCode::Left => {
-                if let Some(index) = self.table_state.selected() {
-                    match index {
-                        WIDTH_INDEX => self.settings.width = self.settings.width.saturating_sub(1),
-                        HEIGHT_INDEX => self.settings.height = self.settings.height.saturating_sub(1),
-                        _ => {}
-                    }
-                }
-            },
-            _ => {}
-        }
-
-        Ok(())
-    }
-
-    fn select(&mut self) {
-        self.selected = true;
-        self.table_state.select(Some(0));
-    }
-
-    fn deselect(&mut self) {
-        self.selected = false;
-        self.table_state.select(None)
-    }
-}
-
-impl Default for SettingsPanelState {
-    fn default() -> Self {
-        let mut table_state = TableState::new();
-        table_state.select(Some(0));
-
-        SettingsPanelState {
-            selected: true,
-            settings: Settings::default(),
-            table_state
-        }
-    }
+    result_panel_state: ResultPanelState,
+    settings_panel_state: SettingsPanelState,
+    weights_dialog_state: WeightsDialogState
 }
 
 /// Settings for the wave function collapse which will be executed in the playground
-struct Settings {
+pub struct Settings {
     width: usize,
-    height: usize
+    height: usize,
+    weights: Vec<f32>
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Settings {
             width: 20,
-            height: 20
+            height: 20,
+            weights: vec![1.0; 3]
         }
     }
 }
@@ -178,6 +63,45 @@ struct Playground {
 }
 
 impl Playground {
+    fn handle_key_input(
+        key_code: KeyCode,
+        state: &mut State
+    ) -> io::Result<()> {
+        match key_code {
+            KeyCode::Char('q') => {
+                state.stopped = true
+            },
+            KeyCode::Char('c') => {
+                state.result_panel_state.collapse(&state.settings);
+            },
+            KeyCode::Char('s') if !state.settings_panel_state.selected => {
+                state.settings_panel_state.select();
+                state.result_panel_state.deselect();
+            },
+            KeyCode::Char('r') if !state.result_panel_state.selected => {
+                state.result_panel_state.select();
+                state.settings_panel_state.deselect();
+            },
+            KeyCode::Char('d') => {
+                state.settings_panel_state.weight_dialog_open = !state.settings_panel_state.weight_dialog_open;
+            },
+            _ => {}
+        }
+
+        SettingsPanel::handle_key_input(
+            key_code,
+            &mut state.settings_panel_state,
+            &mut state.settings
+        )?;
+        WeightsDialog::handle_key_input(
+            key_code,
+            &mut state.weights_dialog_state,
+            &mut state.settings,
+        )?;
+
+        Ok(())
+    }
+
     fn run(&mut self, mut terminal: DefaultTerminal) -> io::Result<()> {
         while !self.state.stopped {
             terminal.draw(|frame| frame.render_widget(&mut *self, frame.area()))?;
@@ -189,7 +113,7 @@ impl Playground {
 
     fn handle_events(&mut self) -> io::Result<()> {
         if let Event::Key(key_event) = event::read()? && key_event.kind == KeyEventKind::Press {
-            self.state.handle_key_input(key_event.code)?;
+            Playground::handle_key_input(key_event.code, &mut self.state)?;
         }
 
         Ok(())
@@ -210,107 +134,16 @@ impl Widget for &mut Playground {
 
         ControlsPanel.render(vert_chunks[0], buf, &mut self.state);
         ResultPanel.render(hor_chunks[0], buf, &mut self.state.result_panel_state);
-        SettingsPanel.render(hor_chunks[1], buf, &mut self.state.settings_panel_state);
-    }
-}
+        SettingsPanel.render(hor_chunks[1], buf, &mut (&mut self.state.settings_panel_state, &mut self.state.settings));
 
-/// Panel which shows the controls of the playground
-struct ControlsPanel;
-
-impl StatefulWidget for ControlsPanel {
-    type State = State;
-
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let block = Block::bordered()
-            .title(" Controls ")
-            .border_set(border::DOUBLE);
-
-        let items = vec![
-            " <c> Collapse with current settings | <q> Quit ".to_string(),
-            match state.result_panel_state.selected {
-                true => "".to_string(),
-                false => " <↓, ↑> Select setting | <←, →> Decrease / Increase value ".to_string()
-            }
-        ];
-
-        Widget::render(
-            List::new(items).block(block),
-            area,
-            buf
-        )
-    }
-}
-
-struct ResultPanel;
-
-impl StatefulWidget for &ResultPanel {
-    type State = ResultPanelState;
-
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) where Self: Sized {
-        let border_set = if state.selected {
-            border::THICK
-        } else {
-            border::PLAIN
-        };
-        let block = Block::bordered()
-            .title(Line::from(" WFC Result <r> ").centered())
-            .border_set(border_set);
-
-        let inner = block.inner(area);
-
-        block.render(area, buf);
-
-        let mut sorted = state.collapsed.clone();
-        sorted.sort_by(|(pos_a, _), (pos_b, _)| pos_a.cmp(pos_b));
-
-        for (xi, x) in (inner.left()..inner.right()).enumerate() {
-            for (yi, y) in (inner.top()..inner.bottom()).enumerate() {
-                if let Some((_, tile)) = sorted.iter().find(|(pos, _)| *pos == p!(xi, yi)) {
-                    let char = tile.get_char();
-                    let color = tile.get_color();
-                    buf[layout::Position::new(x, y)].set_char(char).set_fg(color);
-                }
-            }
+        if self.state.settings_panel_state.weight_dialog_open {
+            WeightsDialog.render(area, buf, &mut (&mut self.state.weights_dialog_state, &mut self.state.settings))
         }
     }
 }
 
-struct SettingsPanel;
-
-impl StatefulWidget for &SettingsPanel {
-    type State = SettingsPanelState;
-
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) where Self: Sized {
-        let border_set = if state.selected {
-            border::THICK
-        } else {
-            border::PLAIN
-        };
-        let block = Block::bordered()
-            .title(" Settings <s> ")
-            .border_set(border_set);
-        let inner = block.inner(area);
-
-        block.render(area, buf);
-
-        let rows = [
-            Row::new(vec!["Width".to_string(), format!("{}", state.settings.width)]),
-            Row::new(vec!["Height".to_string(), format!("{}", state.settings.height)])
-        ];
-        let widths = [
-            Constraint::Percentage(50),
-            Constraint::Percentage(50)
-        ];
-        let table = Table::new(rows, widths)
-            .row_highlight_style(Style::new().reversed())
-            .highlight_symbol(">");
-
-        StatefulWidget::render(table, inner, buf, &mut state.table_state);
-    }
-}
-
 #[derive(Copy, Clone, Eq, PartialEq)]
-enum Tile {
+pub enum Tile {
     Water,
     Sand,
     Forest
