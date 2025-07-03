@@ -85,11 +85,7 @@ impl Playground {
             _ => {}
         }
 
-        SettingsPanel::handle_key_input(
-            key_code,
-            &mut state.settings_panel_state,
-            &mut state.settings
-        )?;
+        SettingsPanel::handle_key_input(key_code, state)?;
 
         Ok(())
     }
@@ -125,8 +121,8 @@ impl Widget for &mut Playground {
         ]).split(vert_chunks[1]);
 
         ControlsPanel.render(vert_chunks[0], buf, &mut self.state);
-        ResultPanel.render(hor_chunks[0], buf, &mut self.state.result_panel_state);
-        SettingsPanel.render(hor_chunks[1], buf, &mut (&mut self.state.settings_panel_state, &mut self.state.settings));
+        ResultPanel.render(hor_chunks[0], buf, &mut self.state);
+        SettingsPanel.render(hor_chunks[1], buf, &mut self.state);
     }
 }
 

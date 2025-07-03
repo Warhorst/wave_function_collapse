@@ -5,7 +5,7 @@ use ratatui::layout::Rect;
 use ratatui::prelude::{Line, Widget, StatefulWidget};
 use ratatui::symbols::border;
 use ratatui::widgets::Block;
-use crate::{collapse, Settings, Tile};
+use crate::{collapse, Settings, State, Tile};
 
 pub struct ResultPanelState {
     pub selected: bool,
@@ -38,9 +38,11 @@ impl Default for ResultPanelState {
 pub struct ResultPanel;
 
 impl StatefulWidget for &ResultPanel {
-    type State = ResultPanelState;
+    type State = State;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) where Self: Sized {
+        let state = &state.result_panel_state;
+        
         let border_set = if state.selected {
             border::THICK
         } else {

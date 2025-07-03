@@ -1,10 +1,10 @@
-use std::io;
+use crate::State;
 use crossterm::event::KeyCode;
-use crate::Settings;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::prelude::{StatefulWidget, Style, Stylize, Widget};
 use ratatui::widgets::{Block, Clear, Row, Table, TableState};
+use std::io;
 
 pub struct WeightsDialogState {
     pub open: bool,
@@ -28,9 +28,11 @@ pub struct WeightsDialog;
 impl WeightsDialog {
     pub fn handle_key_input(
         key_code: KeyCode,
-        state: &mut WeightsDialogState,
-        settings: &mut Settings
+        state: &mut State
     ) -> io::Result<()> {
+        let settings = &mut state.settings;
+        let state = &mut state.settings_panel_state.weights_dialog_state;
+        
         match key_code {
             KeyCode::Up => {
                 state.table_state.select_previous()
@@ -67,9 +69,12 @@ impl WeightsDialog {
 }
 
 impl<'a> StatefulWidget for &'a WeightsDialog {
-    type State = (&'a mut WeightsDialogState, &'a mut Settings);
+    type State = State;
 
-    fn render(self, area: Rect, buf: &mut Buffer, (state, settings): &mut Self::State) {
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        let settings = &state.settings;
+        let state = &mut state.settings_panel_state.weights_dialog_state;
+        
         let area = self.dialog_area(area, 20, 40);
 
         let block = Block::bordered().title("Weights");

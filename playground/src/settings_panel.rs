@@ -1,4 +1,5 @@
-use crate::Settings;
+use crate::weights_dialog::{WeightsDialog, WeightsDialogState};
+use crate::State;
 use crossterm::event::KeyCode;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Rect};
@@ -6,7 +7,6 @@ use ratatui::prelude::{StatefulWidget, Style, Stylize, Widget};
 use ratatui::symbols::border;
 use ratatui::widgets::{Block, Row, Table, TableState};
 use std::io;
-use crate::weights_dialog::{WeightsDialog, WeightsDialogState};
 
 /// Index of the settings row representing the width value
 const WIDTH_INDEX: usize = 0;
@@ -50,30 +50,28 @@ pub struct SettingsPanel;
 impl SettingsPanel {
     pub fn handle_key_input(
         key_code: KeyCode,
-        state: &mut SettingsPanelState,
-        settings: &mut Settings
+        state: &mut State,
     ) -> io::Result<()> {
-        if !state.selected {
+        let settings = &mut state.settings;
+        let settings_state = &mut state.settings_panel_state;
+        
+        if !settings_state.selected {
             return Ok(())
         }
 
-        if state.weights_dialog_state.open {
-            return WeightsDialog::handle_key_input(
-                key_code,
-                &mut state.weights_dialog_state,
-                settings
-            );
+        if settings_state.weights_dialog_state.open {
+            return WeightsDialog::handle_key_input(key_code, state);
         }
 
         match key_code {
             KeyCode::Up => {
-                state.table_state.select_previous();
+                settings_state.table_state.select_previous();
             },
             KeyCode::Down => {
-                state.table_state.select_next()
+                settings_state.table_state.select_next()
             },
             KeyCode::Right => {
-                if let Some(index) = state.table_state.selected() {
+                if let Some(index) = settings_state.table_state.selected() {
                     match index {
                         WIDTH_INDEX => settings.width += 1,
                         HEIGHT_INDEX => settings.height += 1,
@@ -82,7 +80,7 @@ impl SettingsPanel {
                 }
             },
             KeyCode::Left => {
-                if let Some(index) = state.table_state.selected() {
+                if let Some(index) = settings_state.table_state.selected() {
                     match index {
                         WIDTH_INDEX => settings.width = settings.width.saturating_sub(1),
                         HEIGHT_INDEX => settings.height = settings.height.saturating_sub(1),
@@ -91,8 +89,8 @@ impl SettingsPanel {
                 }
             },
             KeyCode::Char(' ') => {
-                if let Some(index) = state.table_state.selected() && index == WEIGHTS_INDEX {
-                    state.weights_dialog_state.open = true
+                if let Some(index) = settings_state.table_state.selected() && index == WEIGHTS_INDEX {
+                    settings_state.weights_dialog_state.open = true
                 }
             },
             _ => {}
@@ -103,10 +101,13 @@ impl SettingsPanel {
 }
 
 impl<'a> StatefulWidget for &'a SettingsPanel {
-    type State = (&'a mut SettingsPanelState, &'a mut Settings);
+    type State = State;
 
-    fn render(self, area: Rect, buf: &mut Buffer, (state, settings): &mut Self::State) where Self: Sized {
-        let border_set = if state.selected {
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) where Self: Sized {
+        let settings = &mut state.settings;
+        let settings_state = &mut state.settings_panel_state;
+        
+        let border_set = if settings_state.selected {
             border::THICK
         } else {
             border::PLAIN
@@ -132,13 +133,10 @@ impl<'a> StatefulWidget for &'a SettingsPanel {
             .row_highlight_style(Style::new().reversed())
             .highlight_symbol(">");
 
-        StatefulWidget::render(table, inner, buf, &mut state.table_state);
+        StatefulWidget::render(table, inner, buf, &mut settings_state.table_state);
 
-        // todo maybe just dont use a dialog, everything is harder this way. Just make the settings
-        //  accessible with indexes
-
-        if state.weights_dialog_state.open {
-            WeightsDialog.render(buf.area, buf, &mut (&mut state.weights_dialog_state, settings))
+        if settings_state.weights_dialog_state.open {
+            WeightsDialog.render(buf.area, buf, state)
         }
     }
 }
