@@ -6,7 +6,6 @@ mod controls_panel;
 use crate::controls_panel::*;
 use crate::result_panel::*;
 use crate::settings_panel::*;
-use crate::weights_dialog::*;
 use color_eyre::Result;
 use crossterm::event;
 use crossterm::event::{Event, KeyCode, KeyEventKind};
@@ -37,11 +36,11 @@ pub struct State {
     settings: Settings,
     result_panel_state: ResultPanelState,
     settings_panel_state: SettingsPanelState,
-    weights_dialog_state: WeightsDialogState
 }
 
 /// Settings for the wave function collapse which will be executed in the playground
 pub struct Settings {
+    tiles: Vec<Tile>,
     width: usize,
     height: usize,
     weights: Vec<f32>
@@ -50,6 +49,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
+            tiles: vec![Water, Sand, Forest],
             width: 20,
             height: 20,
             weights: vec![1.0; 3]
@@ -82,9 +82,6 @@ impl Playground {
                 state.result_panel_state.select();
                 state.settings_panel_state.deselect();
             },
-            KeyCode::Char('d') => {
-                state.settings_panel_state.weight_dialog_open = !state.settings_panel_state.weight_dialog_open;
-            },
             _ => {}
         }
 
@@ -92,11 +89,6 @@ impl Playground {
             key_code,
             &mut state.settings_panel_state,
             &mut state.settings
-        )?;
-        WeightsDialog::handle_key_input(
-            key_code,
-            &mut state.weights_dialog_state,
-            &mut state.settings,
         )?;
 
         Ok(())
@@ -135,14 +127,10 @@ impl Widget for &mut Playground {
         ControlsPanel.render(vert_chunks[0], buf, &mut self.state);
         ResultPanel.render(hor_chunks[0], buf, &mut self.state.result_panel_state);
         SettingsPanel.render(hor_chunks[1], buf, &mut (&mut self.state.settings_panel_state, &mut self.state.settings));
-
-        if self.state.settings_panel_state.weight_dialog_open {
-            WeightsDialog.render(area, buf, &mut (&mut self.state.weights_dialog_state, &mut self.state.settings))
-        }
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Tile {
     Water,
     Sand,
@@ -170,7 +158,7 @@ impl Tile {
 fn collapse(
     settings: &Settings
 ) -> Vec<(Position, Tile)> {
-    let tiles = vec![Water, Sand, Forest];
+    let tiles = settings.tiles.clone();
     let possible_neighbours = PossibleNeighbours::new([
           (Water, Water),
           (Water, Sand),
@@ -187,6 +175,7 @@ fn collapse(
         tiles,
     )
         .with_constraint(possible_neighbours)
+        .with_weights(settings.weights.iter().copied())
         .with_seed(42)
         .collapse()
 }

@@ -3,22 +3,26 @@ use crossterm::event::KeyCode;
 use crate::Settings;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
-use ratatui::prelude::{StatefulWidget, Widget};
-use ratatui::widgets::{Block, Clear, TableState};
+use ratatui::prelude::{StatefulWidget, Style, Stylize, Widget};
+use ratatui::widgets::{Block, Clear, Row, Table, TableState};
 
 pub struct WeightsDialogState {
+    pub open: bool,
     table_state: TableState
 }
 
 impl Default for WeightsDialogState {
     fn default() -> Self {
+        let mut ts = TableState::new();
+        ts.select(Some(0));
+
         WeightsDialogState {
-            table_state: TableState::new()
+            open: false,
+            table_state: ts
         }
     }
 }
 
-// todo will be the dialog the user can set the weights for the different tiles
 pub struct WeightsDialog;
 
 impl WeightsDialog {
@@ -27,7 +31,29 @@ impl WeightsDialog {
         state: &mut WeightsDialogState,
         settings: &mut Settings
     ) -> io::Result<()> {
-        // todo
+        match key_code {
+            KeyCode::Up => {
+                state.table_state.select_previous()
+            },
+            KeyCode::Down => {
+                state.table_state.select_next()
+            },
+            KeyCode::Left => {
+                if let Some(i) = state.table_state.selected() && let Some(value) = settings.weights.get_mut(i) {
+                    *value -= 0.25;
+                }
+            },
+            KeyCode::Right => {
+                if let Some(i) = state.table_state.selected() && let Some(value) = settings.weights.get_mut(i) {
+                    *value += 0.25;
+                }
+            },
+            KeyCode::Esc => {
+                state.open = false
+            },
+            _ => {}
+        }
+
         Ok(())
     }
 
@@ -43,12 +69,25 @@ impl WeightsDialog {
 impl<'a> StatefulWidget for &'a WeightsDialog {
     type State = (&'a mut WeightsDialogState, &'a mut Settings);
 
-    fn render(self, area: Rect, buf: &mut Buffer, (state, settigns): &mut Self::State) {
-        let area = self.dialog_area(area, 60, 20);
+    fn render(self, area: Rect, buf: &mut Buffer, (state, settings): &mut Self::State) {
+        let area = self.dialog_area(area, 20, 40);
 
-        let block = Block::bordered().title("The Dialog");
+        let block = Block::bordered().title("Weights");
+        let inner = block.inner(area);
         Clear.render(area, buf);
         block.render(area, buf);
+
+        let widths = (0..settings.tiles.len())
+            .into_iter()
+            .map(|_| Constraint::Fill(1));
+        let rows = settings.tiles
+            .iter()
+            .zip(settings.weights.iter())
+            .map(|(tile, weight)| Row::new(vec![format!("{tile:?}"), format!("{weight}")]));
+
+        let table = Table::new(rows, widths)
+            .row_highlight_style(Style::new().reversed())
+            .highlight_symbol(">");
+        StatefulWidget::render(table, inner, buf, &mut state.table_state)
     }
 }
-
