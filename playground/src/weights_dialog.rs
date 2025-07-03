@@ -2,7 +2,7 @@ use crate::State;
 use crossterm::event::KeyCode;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
-use ratatui::prelude::{StatefulWidget, Style, Stylize, Widget};
+use ratatui::prelude::{Line, StatefulWidget, Style, Stylize, Widget};
 use ratatui::widgets::{Block, Clear, Row, Table, TableState};
 use std::io;
 
@@ -77,7 +77,9 @@ impl<'a> StatefulWidget for &'a WeightsDialog {
         
         let area = self.dialog_area(area, 20, 40);
 
-        let block = Block::bordered().title("Weights");
+        let block = Block::bordered()
+            .title("Weights")
+            .title(Line::from("<Esc> close").right_aligned());
         let inner = block.inner(area);
         Clear.render(area, buf);
         block.render(area, buf);
