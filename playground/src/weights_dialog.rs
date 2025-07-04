@@ -1,10 +1,9 @@
-use crate::State;
+use crate::{dialog_area, State};
 use crossterm::event::KeyCode;
 use ratatui::buffer::Buffer;
-use ratatui::layout::{Constraint, Flex, Layout, Rect};
+use ratatui::layout::{Constraint, Rect};
 use ratatui::prelude::{Line, StatefulWidget, Style, Stylize, Widget};
 use ratatui::widgets::{Block, Clear, Row, Table, TableState};
-use std::io;
 
 pub struct WeightsDialogState {
     pub open: bool,
@@ -29,7 +28,7 @@ impl WeightsDialog {
     pub fn handle_key_input(
         key_code: KeyCode,
         state: &mut State
-    ) -> io::Result<()> {
+    ) {
         let settings = &mut state.settings;
         let state = &mut state.settings_panel_state.weights_dialog_state;
         
@@ -55,16 +54,6 @@ impl WeightsDialog {
             },
             _ => {}
         }
-
-        Ok(())
-    }
-
-    fn dialog_area(&self, area: Rect, percent_x: u16, percent_y: u16) -> Rect {
-        let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
-        let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
-        let [area] = vertical.areas(area);
-        let [area] = horizontal.areas(area);
-        area
     }
 }
 
@@ -75,7 +64,7 @@ impl<'a> StatefulWidget for &'a WeightsDialog {
         let settings = &state.settings;
         let state = &mut state.settings_panel_state.weights_dialog_state;
         
-        let area = self.dialog_area(area, 20, 40);
+        let area = dialog_area(area, 20, 40);
 
         let block = Block::bordered()
             .title("Weights")

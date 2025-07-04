@@ -2,6 +2,7 @@ mod weights_dialog;
 mod result_panel;
 mod settings_panel;
 mod controls_panel;
+mod seed_dialog;
 
 use crate::controls_panel::*;
 use crate::result_panel::*;
@@ -11,7 +12,7 @@ use crossterm::event;
 use crossterm::event::{Event, KeyCode, KeyEventKind};
 use pad::Position;
 use ratatui::buffer::Buffer;
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::Color;
 use ratatui::widgets::{StatefulWidget, Widget};
 use ratatui::DefaultTerminal;
@@ -38,12 +39,19 @@ pub struct State {
     settings_panel_state: SettingsPanelState,
 }
 
+impl State {
+    fn dialog_open(&self) -> bool {
+        self.settings_panel_state.seed_dialog_state.open || self.settings_panel_state.weights_dialog_state.open
+    }
+}
+
 /// Settings for the wave function collapse which will be executed in the playground
 pub struct Settings {
     tiles: Vec<Tile>,
     width: usize,
     height: usize,
-    weights: Vec<f32>
+    weights: Vec<f32>,
+    seed: String
 }
 
 impl Default for Settings {
@@ -52,7 +60,8 @@ impl Default for Settings {
             tiles: vec![Water, Sand, Forest],
             width: 20,
             height: 20,
-            weights: vec![1.0; 3]
+            weights: vec![1.0; 3],
+            seed: "42".into()
         }
     }
 }
@@ -66,28 +75,28 @@ impl Playground {
     fn handle_key_input(
         key_code: KeyCode,
         state: &mut State
-    ) -> io::Result<()> {
-        match key_code {
-            KeyCode::Char('q') => {
-                state.stopped = true
-            },
-            KeyCode::Char('c') => {
-                state.result_panel_state.collapse(&state.settings);
-            },
-            KeyCode::Char('s') if !state.settings_panel_state.selected => {
-                state.settings_panel_state.select();
-                state.result_panel_state.deselect();
-            },
-            KeyCode::Char('r') if !state.result_panel_state.selected => {
-                state.result_panel_state.select();
-                state.settings_panel_state.deselect();
-            },
-            _ => {}
+    ) {
+        if !state.dialog_open() {
+            match key_code {
+                KeyCode::Char('q') => {
+                    state.stopped = true
+                },
+                KeyCode::Char('c') => {
+                    state.result_panel_state.collapse(&state.settings);
+                },
+                KeyCode::Char('s') if !state.settings_panel_state.selected => {
+                    state.settings_panel_state.select();
+                    state.result_panel_state.deselect();
+                },
+                KeyCode::Char('r') if !state.result_panel_state.selected => {
+                    state.result_panel_state.select();
+                    state.settings_panel_state.deselect();
+                },
+                _ => {}
+            }
         }
 
-        SettingsPanel::handle_key_input(key_code, state)?;
-
-        Ok(())
+        SettingsPanel::handle_key_input(key_code, state);
     }
 
     fn run(&mut self, mut terminal: DefaultTerminal) -> io::Result<()> {
@@ -101,7 +110,7 @@ impl Playground {
 
     fn handle_events(&mut self) -> io::Result<()> {
         if let Event::Key(key_event) = event::read()? && key_event.kind == KeyEventKind::Press {
-            Playground::handle_key_input(key_event.code, &mut self.state)?;
+            Playground::handle_key_input(key_event.code, &mut self.state);
         }
 
         Ok(())
@@ -124,6 +133,15 @@ impl Widget for &mut Playground {
         ResultPanel.render(hor_chunks[0], buf, &mut self.state);
         SettingsPanel.render(hor_chunks[1], buf, &mut self.state);
     }
+}
+
+/// Determine the area for some dialog
+fn dialog_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
+    let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
+    let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
+    let [area] = vertical.areas(area);
+    let [area] = horizontal.areas(area);
+    area
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -172,6 +190,6 @@ fn collapse(
     )
         .with_constraint(possible_neighbours)
         .with_weights(settings.weights.iter().copied())
-        .with_seed(42)
+        .with_seed(settings.seed.clone())
         .collapse()
 }

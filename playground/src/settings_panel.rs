@@ -1,3 +1,4 @@
+use crate::seed_dialog::{SeedDialog, SeedDialogState};
 use crate::weights_dialog::{WeightsDialog, WeightsDialogState};
 use crate::State;
 use crossterm::event::KeyCode;
@@ -6,18 +7,21 @@ use ratatui::layout::{Constraint, Rect};
 use ratatui::prelude::{StatefulWidget, Style, Stylize, Widget};
 use ratatui::symbols::border;
 use ratatui::widgets::{Block, Row, Table, TableState};
-use std::io;
 
 /// Index of the settings row representing the width value
 const WIDTH_INDEX: usize = 0;
 /// Index of the settings row representing the height value
 const HEIGHT_INDEX: usize = 1;
+/// Index of the settings row to open the weights dialog
 const WEIGHTS_INDEX: usize = 2;
+/// Index of the settings row to open the seed dialog
+const SEED_INDEX: usize = 3;
 
 pub struct SettingsPanelState {
     pub selected: bool,
     pub table_state: TableState,
-    pub weights_dialog_state: WeightsDialogState
+    pub weights_dialog_state: WeightsDialogState,
+    pub seed_dialog_state: SeedDialogState
 }
 
 impl SettingsPanelState {
@@ -40,7 +44,8 @@ impl Default for SettingsPanelState {
         SettingsPanelState {
             selected: true,
             table_state,
-            weights_dialog_state: WeightsDialogState::default()
+            weights_dialog_state: WeightsDialogState::default(),
+            seed_dialog_state: SeedDialogState::default()
         }
     }
 }
@@ -51,16 +56,22 @@ impl SettingsPanel {
     pub fn handle_key_input(
         key_code: KeyCode,
         state: &mut State,
-    ) -> io::Result<()> {
+    ) {
         let settings = &mut state.settings;
         let settings_state = &mut state.settings_panel_state;
         
         if !settings_state.selected {
-            return Ok(())
+            return
         }
 
         if settings_state.weights_dialog_state.open {
-            return WeightsDialog::handle_key_input(key_code, state);
+            WeightsDialog::handle_key_input(key_code, state);
+            return
+        }
+        
+        if settings_state.seed_dialog_state.open {
+            SeedDialog::handle_key_input(key_code, state);
+            return
         }
 
         match key_code {
@@ -89,14 +100,16 @@ impl SettingsPanel {
                 }
             },
             KeyCode::Char(' ') => {
-                if let Some(index) = settings_state.table_state.selected() && index == WEIGHTS_INDEX {
-                    settings_state.weights_dialog_state.open = true
+                if let Some(index) = settings_state.table_state.selected() {
+                    match index {
+                        WEIGHTS_INDEX => settings_state.weights_dialog_state.open = true,
+                        SEED_INDEX => settings_state.seed_dialog_state.open = true,
+                        _ => {}
+                    }
                 }
             },
             _ => {}
         }
-
-        Ok(())
     }
 }
 
@@ -122,13 +135,11 @@ impl<'a> StatefulWidget for &'a SettingsPanel {
         let rows = [
             Row::new(vec!["Width".to_string(), format!("{}", settings.width)]),
             Row::new(vec!["Height".to_string(), format!("{}", settings.height)]),
-            Row::new(vec!["Weights...".to_string(), String::new()])
+            Row::new(vec!["Weights...".to_string(), String::new()]),
+            Row::new(vec!["Seed...".to_string(), settings.seed.clone()])
         ];
-        let widths = [
-            Constraint::Fill(1),
-            Constraint::Fill(1),
-            Constraint::Fill(1)
-        ];
+        let widths = (0..rows.len()).into_iter().map(|_| Constraint::Fill(1));
+        
         let table = Table::new(rows, widths)
             .row_highlight_style(Style::new().reversed())
             .highlight_symbol(">");
@@ -136,7 +147,12 @@ impl<'a> StatefulWidget for &'a SettingsPanel {
         StatefulWidget::render(table, inner, buf, &mut settings_state.table_state);
 
         if settings_state.weights_dialog_state.open {
-            WeightsDialog.render(buf.area, buf, state)
+            WeightsDialog.render(buf.area, buf, state);
+            return
+        }
+        
+        if settings_state.seed_dialog_state.open {
+            SeedDialog.render(buf.area, buf, state)
         }
     }
 }
