@@ -1,8 +1,11 @@
+mod seed_dialog;
+
 use Tile::*;
 
 use appcui::prelude::*;
 use pad::Position;
 use wave_function_collapse::{PossibleNeighbours, WaveFunctionCollapse};
+use crate::seed_dialog::SeedDialog;
 
 fn main() -> Result<(), Error> {
     let mut app = App::new()
@@ -22,6 +25,8 @@ struct PlaygroundWindow {
     results_canvas: Handle<Canvas>,
     width_selector: Handle<NumericSelector<usize>>,
     height_selector: Handle<NumericSelector<usize>>,
+    seed_label: Handle<Label>,
+    seed_button: Handle<Button>,
     create_button: Handle<Button>
 }
 
@@ -53,6 +58,8 @@ impl PlaygroundWindow {
             results_canvas: Handle::None,
             width_selector: Handle::None,
             height_selector: Handle::None,
+            seed_label: Handle::None,
+            seed_button: Handle::None,
             create_button: Handle::None
         };
 
@@ -81,10 +88,16 @@ impl PlaygroundWindow {
             Layout::new("x:50%,y:1,w:50%"),
             numericselector::Flags::None
         ));
-        let mut button = button!("Create,x:80%,y:95%,w:20%");
-        // does this do anything?
-        button.set_hotkey(key!("C"));
-        window.create_button = window.add(button);
+
+        let seed_label = Label::new(&window.settings.seed, Layout::new("x:0,y:2,w:50%"));
+        window.seed_label = settings_panel.add(seed_label);
+        let mut seed_button = button!("caption='Set Seed...',x:50%,y:2,w:50%");
+        seed_button.set_hotkey(key!("S"));
+        window.seed_button = settings_panel.add(seed_button);
+        
+        let mut create_button = button!("Create,x:80%,y:95%,w:20%");
+        create_button.set_hotkey(key!("C"));
+        window.create_button = window.add(create_button);
         
         window.add(results_panel);
         window.add(settings_panel);
@@ -97,7 +110,7 @@ impl ButtonEvents for PlaygroundWindow {
     fn on_pressed(&mut self, handle: Handle<Button>) -> EventProcessStatus {
         if handle == self.create_button {
             let collapsed = collapse(&self.settings);
-            let canvas_handle = self.results_canvas.clone();
+            let canvas_handle = self.results_canvas;
             let canvas = self.control_mut(canvas_handle).unwrap();
             let surface = canvas.drawing_surface_mut();
             surface.clear(Character::new(' ', Color::Transparent, Color::Transparent, CharFlags::None));
@@ -113,6 +126,14 @@ impl ButtonEvents for PlaygroundWindow {
                         CharFlags::None
                     )
                 )
+            }
+        } else if handle == self.seed_button {
+            if let Some(seed) = SeedDialog::new(self.settings.seed.clone()).show() {
+                self.settings.seed = seed.clone();
+
+                let label_handle = self.seed_label;
+                let label = self.control_mut(label_handle).unwrap();
+                label.set_caption(&seed)
             }
         }
 
