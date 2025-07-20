@@ -1,6 +1,8 @@
 use Tile::*;
 
 use appcui::prelude::*;
+use pad::Position;
+use wave_function_collapse::{PossibleNeighbours, WaveFunctionCollapse};
 
 fn main() -> Result<(), Error> {
     let mut app = App::new()
@@ -14,12 +16,29 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-#[Window]
+#[Window(events=[ButtonEvents,NumericSelectorEvents<usize>])]
 struct PlaygroundWindow {
     settings: Settings,
+    results_canvas: Handle<Canvas>,
     width_selector: Handle<NumericSelector<usize>>,
     height_selector: Handle<NumericSelector<usize>>,
     create_button: Handle<Button>
+}
+
+impl NumericSelectorEvents<usize> for PlaygroundWindow {
+    fn on_value_changed(
+        &mut self,
+        handle: Handle<NumericSelector<usize>>,
+        value: usize
+    ) -> EventProcessStatus {
+        if handle == self.width_selector {
+            self.settings.width = value
+        } else if handle == self.height_selector {
+            self.settings.height = value
+        }
+        
+        EventProcessStatus::Processed
+    }
 }
 
 impl PlaygroundWindow {
@@ -31,12 +50,16 @@ impl PlaygroundWindow {
                 window::Flags::NoCloseButton
             ),
             settings: Settings::default(),
+            results_canvas: Handle::None,
             width_selector: Handle::None,
             height_selector: Handle::None,
             create_button: Handle::None
         };
 
-        let results_panel = panel!("Results,x:0%,y:0%,w:80%,h:100%,type:Border");
+        let mut results_panel = panel!("Results,x:0%,y:0%,w:80%,h:100%,type:Border");
+
+        let canvas = canvas!("50x50,x:0,y:0,w:100%,h:100%");
+        window.results_canvas = results_panel.add(canvas);
         
         let mut settings_panel = panel!("Settings,x:80%,y:0%,w:20%,h:95%,type:Border");
         
@@ -58,13 +81,42 @@ impl PlaygroundWindow {
             Layout::new("x:50%,y:1,w:50%"),
             numericselector::Flags::None
         ));
-        
-        window.create_button = window.add(button!("Create,x:80%,y:95%,w:20%"));   
+        let mut button = button!("Create,x:80%,y:95%,w:20%");
+        // does this do anything?
+        button.set_hotkey(key!("C"));
+        window.create_button = window.add(button);
         
         window.add(results_panel);
         window.add(settings_panel);
         
         window
+    }
+}
+
+impl ButtonEvents for PlaygroundWindow {
+    fn on_pressed(&mut self, handle: Handle<Button>) -> EventProcessStatus {
+        if handle == self.create_button {
+            let collapsed = collapse(&self.settings);
+            let canvas_handle = self.results_canvas.clone();
+            let canvas = self.control_mut(canvas_handle).unwrap();
+            let surface = canvas.drawing_surface_mut();
+            surface.clear(Character::new(' ', Color::Transparent, Color::Transparent, CharFlags::None));
+
+            for (pos, tile) in collapsed {
+                surface.write_char(
+                    pos.x as i32,
+                    pos.y as i32,
+                    Character::new(
+                        tile.get_char(),
+                        tile.get_color(),
+                        Color::Transparent,
+                        CharFlags::None
+                    )
+                )
+            }
+        }
+
+        EventProcessStatus::Processed
     }
 }
 
@@ -111,4 +163,29 @@ impl Tile {
             Forest => Color::Green
         }
     }
+}
+
+fn collapse(
+    settings: &Settings
+) -> Vec<(Position, Tile)> {
+    let tiles = settings.tiles.clone();
+    let possible_neighbours = PossibleNeighbours::new([
+          (Water, Water),
+          (Water, Sand),
+          (Sand, Water),
+          (Sand, Sand),
+          (Sand, Forest),
+          (Forest, Sand),
+          (Forest, Forest),
+      ], &tiles);
+
+    WaveFunctionCollapse::<3, Tile>::new(
+        settings.width,
+        settings.height,
+        tiles,
+    )
+        .with_constraint(possible_neighbours)
+        .with_weights(settings.weights.iter().copied())
+        .with_seed(settings.seed.clone())
+        .collapse()
 }
