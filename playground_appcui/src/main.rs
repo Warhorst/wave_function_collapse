@@ -1,4 +1,5 @@
 mod seed_dialog;
+mod weights_dialog;
 
 use Tile::*;
 
@@ -6,6 +7,7 @@ use appcui::prelude::*;
 use pad::Position;
 use wave_function_collapse::{PossibleNeighbours, WaveFunctionCollapse};
 use crate::seed_dialog::SeedDialog;
+use crate::weights_dialog::WeightsDialog;
 
 fn main() -> Result<(), Error> {
     let mut app = App::new()
@@ -25,6 +27,7 @@ struct PlaygroundWindow {
     results_canvas: Handle<Canvas>,
     width_selector: Handle<NumericSelector<usize>>,
     height_selector: Handle<NumericSelector<usize>>,
+    weight_button: Handle<Button>,
     seed_label: Handle<Label>,
     seed_button: Handle<Button>,
     create_button: Handle<Button>
@@ -58,6 +61,7 @@ impl PlaygroundWindow {
             results_canvas: Handle::None,
             width_selector: Handle::None,
             height_selector: Handle::None,
+            weight_button: Handle::None,
             seed_label: Handle::None,
             seed_button: Handle::None,
             create_button: Handle::None
@@ -89,9 +93,12 @@ impl PlaygroundWindow {
             numericselector::Flags::None
         ));
 
-        let seed_label = Label::new(&window.settings.seed, Layout::new("x:0,y:2,w:50%"));
+        settings_panel.add(label!("Weights,x:0,y:2,w:50%"));
+        window.weight_button = settings_panel.add(button!("Set...,x:50%,y:2,w:50%"));
+
+        let seed_label = Label::new(&window.settings.seed, Layout::new("x:0,y:3,w:50%"));
         window.seed_label = settings_panel.add(seed_label);
-        let mut seed_button = button!("caption='Set Seed...',x:50%,y:2,w:50%");
+        let mut seed_button = button!("caption='Set Seed...',x:50%,y:3,w:50%");
         seed_button.set_hotkey(key!("S"));
         window.seed_button = settings_panel.add(seed_button);
         
@@ -126,6 +133,11 @@ impl ButtonEvents for PlaygroundWindow {
                         CharFlags::None
                     )
                 )
+            }
+        } else if handle == self.weight_button {
+            let weights = self.settings.tiles.iter().copied().zip(self.settings.weights.iter().copied());
+            if let Some(weights) = WeightsDialog::new(weights).show() {
+               self.settings.weights = weights
             }
         } else if handle == self.seed_button {
             if let Some(seed) = SeedDialog::new(self.settings.seed.clone()).show() {
