@@ -1,9 +1,0 @@
-[package]
-name = "playground_appcui"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-appcui = "0.2.1"
-wave_function_collapse = {path = "../"}
-pad = { git = "https://github.com/Warhorst/pad.git" }

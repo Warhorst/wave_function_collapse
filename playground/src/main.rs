@@ -1,51 +1,159 @@
-mod weights_dialog;
-mod result_panel;
-mod settings_panel;
-mod controls_panel;
 mod seed_dialog;
+mod weights_dialog;
 
-use crate::controls_panel::*;
-use crate::result_panel::*;
-use crate::settings_panel::*;
-use color_eyre::Result;
-use crossterm::event;
-use crossterm::event::{Event, KeyCode, KeyEventKind};
-use pad::Position;
-use ratatui::buffer::Buffer;
-use ratatui::layout::{Constraint, Flex, Layout, Rect};
-use ratatui::style::Color;
-use ratatui::widgets::{StatefulWidget, Widget};
-use ratatui::DefaultTerminal;
-use std::io;
-use wave_function_collapse::{PossibleNeighbours, WaveFunctionCollapse};
 use Tile::*;
 
-fn main() -> Result<()> {
-    color_eyre::install()?;
-    let terminal = ratatui::init();
+use appcui::prelude::*;
+use pad::Position;
+use wave_function_collapse::{PossibleNeighbours, WaveFunctionCollapse};
+use crate::seed_dialog::SeedDialog;
+use crate::weights_dialog::WeightsDialog;
 
-    let mut playground = Playground::default();
+fn main() -> Result<(), Error> {
+    let mut app = App::new()
+        .single_window()
+        .theme(Theme::new(Themes::Light))
+        .build()?;
+    let win = PlaygroundWindow::new();
 
-    let run_result = playground.run(terminal);
-    ratatui::restore();
-    Ok(run_result?)
+    app.add_window(win);
+    app.run();
+    Ok(())
 }
 
-#[derive(Default)]
-pub struct State {
-    stopped: bool,
+#[Window(events=[ButtonEvents,NumericSelectorEvents<usize>])]
+struct PlaygroundWindow {
     settings: Settings,
-    result_panel_state: ResultPanelState,
-    settings_panel_state: SettingsPanelState,
+    results_canvas: Handle<Canvas>,
+    width_selector: Handle<NumericSelector<usize>>,
+    height_selector: Handle<NumericSelector<usize>>,
+    weight_button: Handle<Button>,
+    seed_button: Handle<Button>,
+    create_button: Handle<Button>
 }
 
-impl State {
-    fn dialog_open(&self) -> bool {
-        self.settings_panel_state.seed_dialog_state.open || self.settings_panel_state.weights_dialog_state.open
+impl NumericSelectorEvents<usize> for PlaygroundWindow {
+    fn on_value_changed(
+        &mut self,
+        handle: Handle<NumericSelector<usize>>,
+        value: usize
+    ) -> EventProcessStatus {
+        if handle == self.width_selector {
+            self.settings.width = value
+        } else if handle == self.height_selector {
+            self.settings.height = value
+        }
+        
+        EventProcessStatus::Processed
     }
 }
 
-/// Settings for the wave function collapse which will be executed in the playground
+impl PlaygroundWindow {
+    fn new() -> Self {
+        let mut window = PlaygroundWindow {
+            base: Window::new(
+                "Playground",
+                Layout::new("d:c,w:100,h:100"),
+                window::Flags::NoCloseButton
+            ),
+            settings: Settings::default(),
+            results_canvas: Handle::None,
+            width_selector: Handle::None,
+            height_selector: Handle::None,
+            weight_button: Handle::None,
+            seed_button: Handle::None,
+            create_button: Handle::None
+        };
+
+        let mut results_panel = panel!("Results,x:0%,y:0%,w:80%,h:100%,type:Border");
+
+        let canvas = canvas!("50x50,x:0,y:0,w:100%,h:100%");
+        window.results_canvas = results_panel.add(canvas);
+        
+        let mut settings_panel = panel!("Settings,x:80%,y:0%,w:20%,h:95%,type:Border");
+
+        // width
+        settings_panel.add(label!("Width,x:0,y:0,w:50%"));
+        window.width_selector = settings_panel.add(NumericSelector::<usize>::new(
+            window.settings.width,
+            5,
+            50,
+            1,
+            Layout::new("x:50%,y:0,w:50%"),
+            numericselector::Flags::None
+        ));
+
+        // height
+        settings_panel.add(label!("Height,x:0,y:1,w:50%"));
+        window.height_selector = settings_panel.add(NumericSelector::<usize>::new(
+            window.settings.height,
+            5,
+            50,
+            1,
+            Layout::new("x:50%,y:1,w:50%"),
+            numericselector::Flags::None
+        ));
+
+        // weights
+        settings_panel.add(label!("Weights,x:0,y:2,w:50%"));
+        window.weight_button = settings_panel.add(button!("Set...,x:50%,y:2,w:50%,type=flat"));
+
+        // seed
+        settings_panel.add(Label::new("Seed", Layout::new("x:0,y:3,w:50%")));
+        let seed_button = Button::new(&window.settings.seed, Layout::new("x:50%,y:3,w:50%"), button::Type::Flat);
+        window.seed_button = settings_panel.add(seed_button);
+
+        // create button
+        let mut create_button = button!("Create,x:80%,y:95%,w:20%");
+        create_button.set_hotkey(key!("C"));
+        window.create_button = window.add(create_button);
+        
+        window.add(results_panel);
+        window.add(settings_panel);
+        
+        window
+    }
+}
+
+impl ButtonEvents for PlaygroundWindow {
+    fn on_pressed(&mut self, handle: Handle<Button>) -> EventProcessStatus {
+        if handle == self.create_button {
+            let collapsed = collapse(&self.settings);
+            let canvas_handle = self.results_canvas;
+            let canvas = self.control_mut(canvas_handle).unwrap();
+            let surface = canvas.drawing_surface_mut();
+            surface.clear(Character::new(' ', Color::Transparent, Color::Transparent, CharFlags::None));
+
+            for (pos, tile) in collapsed {
+                surface.write_char(
+                    pos.x as i32,
+                    pos.y as i32,
+                    Character::new(
+                        tile.get_char(),
+                        tile.get_color(),
+                        Color::Transparent,
+                        CharFlags::None
+                    )
+                )
+            }
+        } else if handle == self.weight_button {
+            let weights = self.settings.tiles.iter().copied().zip(self.settings.weights.iter().copied());
+            if let Some(weights) = WeightsDialog::new(weights).show() {
+               self.settings.weights = weights
+            }
+        } else if handle == self.seed_button {
+            if let Some(seed) = SeedDialog::new(self.settings.seed.clone()).show() {
+                self.settings.seed = seed.clone();
+
+                let button = self.control_mut(handle).unwrap();
+                button.set_caption(&seed);
+            }
+        }
+
+        EventProcessStatus::Processed
+    }
+}
+
 pub struct Settings {
     tiles: Vec<Tile>,
     width: usize,
@@ -64,84 +172,6 @@ impl Default for Settings {
             seed: "42".into()
         }
     }
-}
-
-#[derive(Default)]
-struct Playground {
-    state: State,
-}
-
-impl Playground {
-    fn handle_key_input(
-        key_code: KeyCode,
-        state: &mut State
-    ) {
-        if !state.dialog_open() {
-            match key_code {
-                KeyCode::Char('q') => {
-                    state.stopped = true
-                },
-                KeyCode::Char('c') => {
-                    state.result_panel_state.collapse(&state.settings);
-                },
-                KeyCode::Char('s') if !state.settings_panel_state.selected => {
-                    state.settings_panel_state.select();
-                    state.result_panel_state.deselect();
-                },
-                KeyCode::Char('r') if !state.result_panel_state.selected => {
-                    state.result_panel_state.select();
-                    state.settings_panel_state.deselect();
-                },
-                _ => {}
-            }
-        }
-
-        SettingsPanel::handle_key_input(key_code, state);
-    }
-
-    fn run(&mut self, mut terminal: DefaultTerminal) -> io::Result<()> {
-        while !self.state.stopped {
-            terminal.draw(|frame| frame.render_widget(&mut *self, frame.area()))?;
-            self.handle_events()?;
-        }
-
-        Ok(())
-    }
-
-    fn handle_events(&mut self) -> io::Result<()> {
-        if let Event::Key(key_event) = event::read()? && key_event.kind == KeyEventKind::Press {
-            Playground::handle_key_input(key_event.code, &mut self.state);
-        }
-
-        Ok(())
-    }
-}
-
-impl Widget for &mut Playground {
-    fn render(self, area: Rect, buf: &mut Buffer) where Self: Sized {
-        let vert_chunks = Layout::vertical([
-            Constraint::Length(4),
-            Constraint::Fill(1)
-        ]).split(area);
-
-        let hor_chunks = Layout::horizontal([
-            Constraint::Percentage(75),
-            Constraint::Percentage(25),
-        ]).split(vert_chunks[1]);
-
-        ControlsPanel.render(vert_chunks[0], buf, &mut self.state);
-        ResultPanel.render(hor_chunks[0], buf, &mut self.state);
-        SettingsPanel.render(hor_chunks[1], buf, &mut self.state);
-    }
-}
-
-/// Determine the area for some dialog
-fn dialog_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
-    let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
-    let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
-    let [area] = vertical.areas(area);
-    let [area] = horizontal.areas(area);
-    area
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -181,7 +211,7 @@ fn collapse(
           (Sand, Forest),
           (Forest, Sand),
           (Forest, Forest),
-    ], &tiles);
+      ], &tiles);
 
     WaveFunctionCollapse::<3, Tile>::new(
         settings.width,

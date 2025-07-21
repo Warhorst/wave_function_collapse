@@ -1,89 +1,62 @@
-use crate::{dialog_area, State};
-use crossterm::event::KeyCode;
-use ratatui::buffer::Buffer;
-use ratatui::layout::{Constraint, Rect};
-use ratatui::prelude::{Line, StatefulWidget, Style, Stylize, Widget};
-use ratatui::widgets::{Block, Clear, Row, Table, TableState};
+use appcui::prelude::*;
+use crate::Tile;
 
-pub struct WeightsDialogState {
-    pub open: bool,
-    table_state: TableState
+// todo cannot use the generic type directly in the response. Create issue.
+pub type WeightsDialogResponse = Vec<f32>;
+
+#[ModalWindow(events=[ButtonEvents], response=WeightsDialogResponse)]
+pub struct WeightsDialog {
+    weight_setters: Vec<Handle<NumericSelector<f32>>>,
+    confirm_button: Handle<Button>
 }
-
-impl Default for WeightsDialogState {
-    fn default() -> Self {
-        let mut ts = TableState::new();
-        ts.select(Some(0));
-
-        WeightsDialogState {
-            open: false,
-            table_state: ts
-        }
-    }
-}
-
-pub struct WeightsDialog;
 
 impl WeightsDialog {
-    pub fn handle_key_input(
-        key_code: KeyCode,
-        state: &mut State
-    ) {
-        let settings = &mut state.settings;
-        let state = &mut state.settings_panel_state.weights_dialog_state;
-        
-        match key_code {
-            KeyCode::Up => {
-                state.table_state.select_previous()
-            },
-            KeyCode::Down => {
-                state.table_state.select_next()
-            },
-            KeyCode::Left => {
-                if let Some(i) = state.table_state.selected() && let Some(value) = settings.weights.get_mut(i) {
-                    *value -= 0.25;
-                }
-            },
-            KeyCode::Right => {
-                if let Some(i) = state.table_state.selected() && let Some(value) = settings.weights.get_mut(i) {
-                    *value += 0.25;
-                }
-            },
-            KeyCode::Esc => {
-                state.open = false
-            },
-            _ => {}
+    pub fn new(weights: impl IntoIterator<Item=(Tile, f32)>) -> Self {
+        let weights = weights.into_iter().collect::<Vec<_>>();
+        let mut window = WeightsDialog {
+            base: ModalWindow::new(
+                "Set Weights",
+                Layout::new(&format!("d:c,w:20%,h:{}", weights.len() + 3)), // +3 because 2 for the border and 1 extra for the button
+                window::Flags::None
+            ),
+            weight_setters: Vec::with_capacity(weights.len()),
+            confirm_button: Handle::None
+        };
+
+        for (i, (tile, weight)) in weights.iter().enumerate() {
+            window.add(Label::new(
+                &format!("{tile:?}"),
+                Layout::new(&format!("x:0,y:{i},w:50%"))
+            ));
+            let selector = NumericSelector::new(
+                *weight,
+                0.25,
+                5.0,
+                0.25,
+                Layout::new(&format!("x:50%,y:{i},w:50%")),
+                numericselector::Flags::None
+            );
+            let handle = window.add(selector);
+            window.weight_setters.push(handle);
         }
+
+        window.confirm_button = window.add(Button::new("Confirm", Layout::new(&format!("x:0,y:{},w:100%", weights.len())), button::Type::Normal));
+
+        window
     }
 }
 
-impl<'a> StatefulWidget for &'a WeightsDialog {
-    type State = State;
+impl ButtonEvents for WeightsDialog {
+    fn on_pressed(&mut self, handle: Handle<Button>) -> EventProcessStatus {
+        if handle == self.confirm_button {
+            let response = self.weight_setters
+                .iter()
+                .map(|handle| self.control(*handle).unwrap())
+                .map(|selector| selector.value())
+                .collect::<Vec<_>>();
+            self.exit_with(response);
+        }
 
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let settings = &state.settings;
-        let state = &mut state.settings_panel_state.weights_dialog_state;
-        
-        let area = dialog_area(area, 20, 40);
-
-        let block = Block::bordered()
-            .title("Weights")
-            .title(Line::from("<Esc> close").right_aligned());
-        let inner = block.inner(area);
-        Clear.render(area, buf);
-        block.render(area, buf);
-
-        let widths = (0..settings.tiles.len())
-            .into_iter()
-            .map(|_| Constraint::Fill(1));
-        let rows = settings.tiles
-            .iter()
-            .zip(settings.weights.iter())
-            .map(|(tile, weight)| Row::new(vec![format!("{tile:?}"), format!("{weight}")]));
-
-        let table = Table::new(rows, widths)
-            .row_highlight_style(Style::new().reversed())
-            .highlight_symbol(">");
-        StatefulWidget::render(table, inner, buf, &mut state.table_state)
+        EventProcessStatus::Processed
     }
 }

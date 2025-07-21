@@ -1,6 +1,8 @@
 # Playground
 This is a TUI app to test the Wave Function Collapse on an example.
 
+Tested in Windows Terminal with the Campbell color scheme.
+
 ## Ideas
 - add an interactive mode
   - Add a setting to switch modes
