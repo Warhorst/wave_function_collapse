@@ -28,7 +28,6 @@ struct PlaygroundWindow {
     width_selector: Handle<NumericSelector<usize>>,
     height_selector: Handle<NumericSelector<usize>>,
     weight_button: Handle<Button>,
-    seed_label: Handle<Label>,
     seed_button: Handle<Button>,
     create_button: Handle<Button>
 }
@@ -62,7 +61,6 @@ impl PlaygroundWindow {
             width_selector: Handle::None,
             height_selector: Handle::None,
             weight_button: Handle::None,
-            seed_label: Handle::None,
             seed_button: Handle::None,
             create_button: Handle::None
         };
@@ -73,7 +71,8 @@ impl PlaygroundWindow {
         window.results_canvas = results_panel.add(canvas);
         
         let mut settings_panel = panel!("Settings,x:80%,y:0%,w:20%,h:95%,type:Border");
-        
+
+        // width
         settings_panel.add(label!("Width,x:0,y:0,w:50%"));
         window.width_selector = settings_panel.add(NumericSelector::<usize>::new(
             window.settings.width,
@@ -83,6 +82,8 @@ impl PlaygroundWindow {
             Layout::new("x:50%,y:0,w:50%"),
             numericselector::Flags::None
         ));
+
+        // height
         settings_panel.add(label!("Height,x:0,y:1,w:50%"));
         window.height_selector = settings_panel.add(NumericSelector::<usize>::new(
             window.settings.height,
@@ -93,15 +94,16 @@ impl PlaygroundWindow {
             numericselector::Flags::None
         ));
 
+        // weights
         settings_panel.add(label!("Weights,x:0,y:2,w:50%"));
-        window.weight_button = settings_panel.add(button!("Set...,x:50%,y:2,w:50%"));
+        window.weight_button = settings_panel.add(button!("Set...,x:50%,y:2,w:50%,type=flat"));
 
-        let seed_label = Label::new(&window.settings.seed, Layout::new("x:0,y:3,w:50%"));
-        window.seed_label = settings_panel.add(seed_label);
-        let mut seed_button = button!("caption='Set Seed...',x:50%,y:3,w:50%");
-        seed_button.set_hotkey(key!("S"));
+        // seed
+        settings_panel.add(Label::new("Seed", Layout::new("x:0,y:3,w:50%")));
+        let seed_button = Button::new(&window.settings.seed, Layout::new("x:50%,y:3,w:50%"), button::Type::Flat);
         window.seed_button = settings_panel.add(seed_button);
-        
+
+        // create button
         let mut create_button = button!("Create,x:80%,y:95%,w:20%");
         create_button.set_hotkey(key!("C"));
         window.create_button = window.add(create_button);
@@ -143,9 +145,8 @@ impl ButtonEvents for PlaygroundWindow {
             if let Some(seed) = SeedDialog::new(self.settings.seed.clone()).show() {
                 self.settings.seed = seed.clone();
 
-                let label_handle = self.seed_label;
-                let label = self.control_mut(label_handle).unwrap();
-                label.set_caption(&seed)
+                let button = self.control_mut(handle).unwrap();
+                button.set_caption(&seed);
             }
         }
 
