@@ -53,7 +53,7 @@ impl PlaygroundWindow {
         let mut window = PlaygroundWindow {
             base: Window::new(
                 "Playground",
-                Layout::new("d:c,w:100,h:100"),
+                layout!("align:c,w:100,h:100"),
                 window::Flags::NoCloseButton
             ),
             settings: Settings::default(),
@@ -79,7 +79,7 @@ impl PlaygroundWindow {
             5,
             50,
             1,
-            Layout::new("x:50%,y:0,w:50%"),
+            layout!("x:50%,y:0,w:50%"),
             numericselector::Flags::None
         ));
 
@@ -90,7 +90,7 @@ impl PlaygroundWindow {
             5,
             50,
             1,
-            Layout::new("x:50%,y:1,w:50%"),
+            layout!("x:50%,y:1,w:50%"),
             numericselector::Flags::None
         ));
 
@@ -99,8 +99,8 @@ impl PlaygroundWindow {
         window.weight_button = settings_panel.add(button!("Set...,x:50%,y:2,w:50%,type=flat"));
 
         // seed
-        settings_panel.add(Label::new("Seed", Layout::new("x:0,y:3,w:50%")));
-        let seed_button = Button::new(&window.settings.seed, Layout::new("x:50%,y:3,w:50%"), button::Type::Flat);
+        settings_panel.add(Label::new("Seed", layout!("x:0,y:3,w:50%")));
+        let seed_button = Button::new(&window.settings.seed, layout!("x:50%,y:3,w:50%"), button::Type::Flat);
         window.seed_button = settings_panel.add(seed_button);
 
         // create button

@@ -10,6 +10,6 @@ opt-level = 1
 opt-level = 3
 
 [dependencies]
-appcui = "0.2.1"
+appcui = "0.3.1"
 wave_function_collapse = {path = "../"}
 pad = { git = "https://github.com/Warhorst/pad.git" }
