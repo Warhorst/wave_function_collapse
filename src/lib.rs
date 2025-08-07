@@ -193,6 +193,8 @@ impl<T> Constraint<T> for PossibleNeighbours {
     }
 }
 
+/// Contains the current state of the WFC with all the cells at their respective positions.
+/// The WFC is done if all positions on the board are collapsed.
 pub struct Board<const C: usize> {
     /// Width of the board
     width: usize,
@@ -373,6 +375,7 @@ impl<const C: usize> Cell<C> {
     }
 }
 
+/// Provides random numbers to the WFC.
 struct Random {
     rng: StdRng,
 }
