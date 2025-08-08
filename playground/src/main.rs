@@ -4,7 +4,7 @@ mod weights_dialog;
 use Tile::*;
 
 use appcui::prelude::*;
-use pad::Position;
+use pad::position::Position;
 use wave_function_collapse::{PossibleNeighbours, WaveFunctionCollapse};
 use crate::seed_dialog::SeedDialog;
 use crate::weights_dialog::WeightsDialog;
@@ -78,7 +78,7 @@ impl PlaygroundWindow {
             window.settings.width,
             5,
             50,
-            1,
+            5,
             layout!("x:50%,y:0,w:50%"),
             numericselector::Flags::None
         ));
@@ -89,7 +89,7 @@ impl PlaygroundWindow {
             window.settings.height,
             5,
             50,
-            1,
+            5,
             layout!("x:50%,y:1,w:50%"),
             numericselector::Flags::None
         ));
