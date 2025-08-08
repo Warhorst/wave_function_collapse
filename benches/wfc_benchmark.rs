@@ -18,7 +18,6 @@ pub fn benchmark(c: &mut Criterion) {
             (Sand, Water),
             (Sand, Sand),
             (Sand, Forest),
-            (Forest, Sand),
             (Forest, Forest),
         ], &tiles);
 

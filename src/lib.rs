@@ -61,9 +61,14 @@ impl<const C: usize, T: Clone> WaveFunctionCollapse<C, T> {
     /// Attempting to perform a wfc with more tiles than C results in a crash
     pub fn collapse(mut self) -> Vec<(Position, T)> {
         while !self.board.collapsed() {
-            let (pos, cell) = self.board.get_min_entropy_position();
-            let cell_clone = *cell; // all for the borrow checker
-            let possible_indices = cell_clone.get_possible_indices();
+            let (pos, cell) = match self.board.min_non_collapsed {
+                // Some best next cell is already known. Use it and clear the cache
+                Some(_) => self.board.min_non_collapsed.take().unwrap(),
+                // No best next cell is known, search the whole board for the one with the lowest entropy
+                None => self.board.get_min_entropy_position()
+            };
+
+            let possible_indices = cell.get_possible_indices();
             let index = self.choose_next_index(possible_indices);
             self.board.collapse_position(pos, index);
             self.board.propagate(pos, &self.tile_constraints, &self.tiles);
@@ -205,6 +210,9 @@ pub struct Board<const C: usize> {
     /// Caches the amount of not already collapsed positions to quickly check
     /// if the whole board is collapsed
     not_collapsed_positions: usize,
+    /// Caches the best (lowest entropy) next cell to collapse which might was found when collapsing
+    /// If no min next cell is known, the whole board has to be searched for the lowest entropy position
+    min_non_collapsed: Option<(Position, Cell<C>)>
 }
 
 impl<const C: usize> Board<C> {
@@ -223,6 +231,7 @@ impl<const C: usize> Board<C> {
             height,
             cells,
             not_collapsed_positions: width * height,
+            min_non_collapsed: None
         }
     }
 
@@ -279,6 +288,16 @@ impl<const C: usize> Board<C> {
             if cell.is_collapsed() {
                 self.not_collapsed_positions -= 1;
                 self.propagate(pos, tile_constraints, all_tiles)
+            } else {
+                // update the cache with the best next cell
+                self.min_non_collapsed = Some(match self.min_non_collapsed {
+                    // the current cell now has a lower entropy than the current min cell, overwrite
+                    Some((_, c)) if cell.entropy < c.entropy => (pos, *cell),
+                    // the current cell is not better, keep the same vale
+                    Some((p, c)) => (p, c),
+                    // no min value is set, use the current cell
+                    None => (pos, *cell)
+                });
             }
         }
     }
@@ -290,10 +309,10 @@ impl<const C: usize> Board<C> {
             && pos.y < self.height as isize
     }
 
-    fn get_min_entropy_position(&self) -> (Position, &Cell<C>) {
+    fn get_min_entropy_position(&self) -> (Position, Cell<C>) {
         p!(0, 0)
             .iter_to(p!(self.width - 1, self.height - 1))
-            .map(|pos| (pos, self.get_cell(pos)))
+            .map(|pos| (pos, *self.get_cell(pos)))
             .filter(|(_, cell)| cell.entropy > 1)
             .min_by(|(_, cell_a), (_, cell_b)| cell_a.entropy.cmp(&cell_b.entropy))
             .expect("At least one not collapsed cell should exist")
