@@ -1,5 +1,6 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 use pad::*;
+use pad::position::Position;
 use rand::distributions::WeightedIndex;
 use rand::prelude::{Distribution, StdRng};
 use rand::{Rng, SeedableRng};
