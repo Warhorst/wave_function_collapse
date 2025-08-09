@@ -12,6 +12,11 @@ use rand::{Rng, SeedableRng};
 //  - MAYBE allowing more complex constraints (this might require fast access to all the collapsed/not collapsed tiles)
 //  - MAYBE Providing an iterator, so I can watch the wfc work
 
+// todo propagation queue idea: The Board holds a queue of positions which need propagation.
+//  In every iteration, if something is in the queue, it will propagate it first
+//  ... and then how do I use this to create an iterator? The propagation might not yield a newly collapsed position. Maybe
+//  I should have a collapsed queue instead
+
 pub struct WaveFunctionCollapse<const C: usize, T: Clone> {
     board: Board<C>,
     tiles: Vec<T>,
@@ -150,6 +155,12 @@ impl<T> TileConstraints<T> {
 //  - Directional neighbour restrictions, like the original coast example
 //  I could store all the collapsed positions of the board in a vector and give a reference to them
 //  into the constraints, so I could create even more complex constraints + This would make a WFC iterator possible
+
+// todo this interface needs some rework:
+//  - I need to provide a reference to the board
+//  - for convenience, the tiles should be provided as references to the actual tiles, not the indexes
+//  - if I have the board, I dont need the tile slice
+//  - if I have the board, I might no longer need the collapsed neighbour
 
 pub trait Constraint<T> {
     /// Check for a specific tile and its given collapsed neighbour if it would be a valid
