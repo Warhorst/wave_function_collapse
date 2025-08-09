@@ -5,7 +5,7 @@ use Tile::*;
 
 use appcui::prelude::*;
 use pad::position::Position;
-use wave_function_collapse::{PossibleNeighbours, WaveFunctionCollapse};
+use wave_function_collapse::{constraints::PossibleNeighbours, WaveFunctionCollapse};
 use crate::seed_dialog::SeedDialog;
 use crate::weights_dialog::WeightsDialog;
 

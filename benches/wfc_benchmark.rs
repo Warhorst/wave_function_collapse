@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use wave_function_collapse::{PossibleNeighbours, WaveFunctionCollapse};
+use wave_function_collapse::{constraints::PossibleNeighbours, WaveFunctionCollapse};
 use crate::Tile::*;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
