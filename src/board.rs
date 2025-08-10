@@ -54,10 +54,10 @@ impl<const C: usize> Board<C> {
     /// Adapt all the cardinal neighbours of the given collapsed position
     /// This works recursive, so a collapsed neighbour will propagate the collapse to all
     /// its neighbours
-    pub fn propagate<T>(
+    pub (crate) fn propagate<T>(
         &mut self,
         collapsed_position: Position,
-        tile_constraints: &TileConstraints<T>,
+        tile_constraints: &TileConstraints<C, T>,
         all_tiles: &[T]
     ) {
         let collapsed_tile = self.get_cell(collapsed_position).get_collapsed_index();
@@ -75,10 +75,11 @@ impl<const C: usize> Board<C> {
 
             let cell = self.get_cell(pos);
             let cell_indices = cell.get_possible_indices();
-            let new_indices = tile_constraints.get_possible_indices::<C>(
+            let new_indices = tile_constraints.get_possible_indices(
                 (&cell_indices, pos),
                 (collapsed_tile, collapsed_position),
-                all_tiles
+                &self,
+                all_tiles,
             );
 
             if new_indices[0] == u8::MAX {
@@ -125,11 +126,11 @@ impl<const C: usize> Board<C> {
             .expect("At least one not collapsed cell should exist")
     }
 
-    fn get_cell(&self, pos: Position) -> &Cell<C> {
+    pub fn get_cell(&self, pos: Position) -> &Cell<C> {
         self.cells.get(self.width * pos.y as usize + pos.x as usize).expect(format!("A cell at position {:?} should exist", pos).as_str())
     }
 
-    fn get_cell_mut(&mut self, pos: Position) -> &mut Cell<C> {
+    pub fn get_cell_mut(&mut self, pos: Position) -> &mut Cell<C> {
         self.cells.get_mut(self.width * pos.y as usize + pos.x as usize).expect(format!("A cell at position {:?} should exist", pos).as_str())
     }
 

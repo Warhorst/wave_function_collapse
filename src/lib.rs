@@ -23,7 +23,7 @@ use crate::constraints::{Constraint, TileConstraints};
 pub struct WaveFunctionCollapse<const C: usize, T: Clone> {
     board: Board<C>,
     tiles: Vec<T>,
-    tile_constraints: TileConstraints<T>,
+    tile_constraints: TileConstraints<C, T>,
     random: Random,
     weights: Option<[f32; C]>,
 }
@@ -62,7 +62,7 @@ impl<const C: usize, T: Clone> WaveFunctionCollapse<C, T> {
         self
     }
 
-    pub fn with_constraint(mut self, constraint: impl Constraint<T> + 'static) -> Self {
+    pub fn with_constraint(mut self, constraint: impl Constraint<C, T> + 'static) -> Self {
         self.tile_constraints.add_constraint(constraint);
         self
     }
