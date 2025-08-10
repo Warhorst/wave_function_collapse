@@ -20,6 +20,8 @@ use crate::constraints::{Constraint, TileConstraints};
 //  ... and then how do I use this to create an iterator? The propagation might not yield a newly collapsed position. Maybe
 //  I should have a collapsed queue instead
 
+// todo try a precollapse and return an error
+
 pub struct WaveFunctionCollapse<const C: usize, T: Clone> {
     board: Board<C>,
     tiles: Vec<T>,

@@ -60,6 +60,8 @@ impl<const C: usize> Board<C> {
         tile_constraints: &TileConstraints<C, T>,
         all_tiles: &[T]
     ) {
+        // todo try a queue
+        
         let collapsed_tile = self.get_cell(collapsed_position).get_collapsed_index();
 
         for pos in collapsed_position.cardinal_neighbours() {
