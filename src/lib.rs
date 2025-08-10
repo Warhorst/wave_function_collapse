@@ -20,21 +20,21 @@ use crate::constraints::{Constraint, TileConstraints};
 //  ... and then how do I use this to create an iterator? The propagation might not yield a newly collapsed position. Maybe
 //  I should have a collapsed queue instead
 
-pub struct WaveFunctionCollapse<const C: usize, T: Clone> {
-    board: Board<C>,
+pub struct WaveFunctionCollapse<T: Clone> {
+    board: Board,
     tiles: Vec<T>,
     tile_constraints: TileConstraints<T>,
     random: Random,
-    weights: Option<[f32; C]>,
+    weights: Option<[f32; 64]>,
 }
 
-impl<const C: usize, T: Clone> WaveFunctionCollapse<C, T> {
+impl<T: Clone> WaveFunctionCollapse<T> {
     pub fn new(
         width: usize,
         height: usize,
         tiles: Vec<T>,
     ) -> Self {
-        let board = Board::<C>::new(width, height, tiles.len());
+        let board = Board::new(width, height, tiles.len());
 
         WaveFunctionCollapse {
             board,
@@ -52,7 +52,7 @@ impl<const C: usize, T: Clone> WaveFunctionCollapse<C, T> {
     }
 
     pub fn with_weights(mut self, tile_weights: impl IntoIterator<Item=f32>) -> Self {
-        let mut weights = [0.0; C];
+        let mut weights = [0.0; 64];
 
         for (i, weight) in tile_weights.into_iter().enumerate() {
             weights[i] = weight;
@@ -92,7 +92,7 @@ impl<const C: usize, T: Clone> WaveFunctionCollapse<C, T> {
     fn choose_next_index(&mut self, possible_indices: &[usize]) -> usize {
         match self.weights {
             Some(weights) => {
-                let mut possible_weights = [0.0; C];
+                let mut possible_weights = [0.0; 64];
 
                 for (i, index) in possible_indices.iter().enumerate() {
                     possible_weights[i] = weights[*index];

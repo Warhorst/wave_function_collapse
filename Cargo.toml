@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 pad = {git = "https://github.com/Warhorst/pad.git"}
+bitarray = {git = "https://github.com/Warhorst/bitarray.git"}
 rand = "0.8.5"
 
 [dev-dependencies]

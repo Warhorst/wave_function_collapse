@@ -5,22 +5,22 @@ use crate::constraints::TileConstraints;
 
 /// Contains the current state of the WFC with all the cells at their respective positions.
 /// The WFC is done if all positions on the board are collapsed.
-pub struct Board<const C: usize> {
+pub struct Board {
     /// Width of the board
     width: usize,
     /// Height of the board
     height: usize,
     /// The cells of the board, which tell what tiles are still possible
-    cells: Vec<Cell<C>>,
+    cells: Vec<Cell>,
     /// Caches the amount of not already collapsed positions to quickly check
     /// if the whole board is collapsed
     not_collapsed_positions: usize,
     /// Caches the best (lowest entropy) next cell to collapse which might was found when collapsing
     /// If no min next cell is known, the whole board has to be searched for the lowest entropy position
-    pub min_non_collapsed: Option<(Position, Cell<C>)>
+    pub min_non_collapsed: Option<(Position, Cell)>
 }
 
-impl<const C: usize> Board<C> {
+impl Board {
     pub fn new(
         width: usize,
         height: usize,
@@ -28,7 +28,7 @@ impl<const C: usize> Board<C> {
     ) -> Self {
         let cells = (0..(width * height))
             .into_iter()
-            .map(|_| Cell::<C>::new(num_tiles))
+            .map(|_| Cell::new(num_tiles))
             .collect();
 
         Board {
@@ -75,7 +75,7 @@ impl<const C: usize> Board<C> {
 
             let cell = self.get_cell(pos);
             let cell_indices = cell.get_possible_indices();
-            let new_indices = tile_constraints.get_possible_indices::<C>(
+            let new_indices = tile_constraints.get_possible_indices(
                 (&cell_indices, pos),
                 (collapsed_tile, collapsed_position),
                 all_tiles
@@ -116,7 +116,7 @@ impl<const C: usize> Board<C> {
             && pos.y < self.height as isize
     }
 
-    pub fn get_min_entropy_position(&self) -> (Position, Cell<C>) {
+    pub fn get_min_entropy_position(&self) -> (Position, Cell) {
         p!(0, 0)
             .iter_to(p!(self.width - 1, self.height - 1))
             .map(|pos| (pos, *self.get_cell(pos)))
@@ -125,11 +125,11 @@ impl<const C: usize> Board<C> {
             .expect("At least one not collapsed cell should exist")
     }
 
-    fn get_cell(&self, pos: Position) -> &Cell<C> {
+    fn get_cell(&self, pos: Position) -> &Cell {
         self.cells.get(self.width * pos.y as usize + pos.x as usize).expect(format!("A cell at position {:?} should exist", pos).as_str())
     }
 
-    fn get_cell_mut(&mut self, pos: Position) -> &mut Cell<C> {
+    fn get_cell_mut(&mut self, pos: Position) -> &mut Cell {
         self.cells.get_mut(self.width * pos.y as usize + pos.x as usize).expect(format!("A cell at position {:?} should exist", pos).as_str())
     }
 
