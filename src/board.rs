@@ -92,11 +92,15 @@ impl<const C: usize> Board<C> {
             let cell = self.get_cell(pos);
 
             if cell.is_collapsed() {
+                // if the best known position to collapse next is now collapsed, clear
+                // it so a new position can be determined
+                if let Some((p, _)) = self.min_non_collapsed && p == pos {
+                    self.min_non_collapsed = None
+                }
+
                 self.not_collapsed_positions -= 1;
                 self.propagate(pos, tile_constraints, all_tiles)
             } else {
-                // todo what if this position gets collapses later in another propagate step?
-
                 // update the cache with the best next cell
                 self.min_non_collapsed = Some(match self.min_non_collapsed {
                     // the current cell now has a lower entropy than the current min cell, overwrite
