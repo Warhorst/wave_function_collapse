@@ -1,4 +1,4 @@
-mod board;
+pub mod board;
 pub mod constraints;
 mod random;
 mod cell;

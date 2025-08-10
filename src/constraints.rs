@@ -55,6 +55,9 @@ impl<const C: usize, T> TileConstraints<C, T> {
 //  I could store all the collapsed positions of the board in a vector and give a reference to them
 //  into the constraints, so I could create even more complex constraints + This would make a WFC iterator possible
 
+// todo I am not super happy with this. The board is actually an internal representation of the WFCs data
+//  and should not be exposed like that (its module must be public too because of this)
+
 pub trait Constraint<const C: usize, T> {
     /// Check for a specific tile and its given collapsed neighbour if it would be a valid
     /// remaining choice.
