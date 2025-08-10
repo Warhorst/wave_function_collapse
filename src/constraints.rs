@@ -19,11 +19,11 @@ impl<T> TileConstraints<T> {
 
     pub fn get_possible_indices<const C: usize>(
         &self,
-        (possible_tiles, possible_tiles_pos): (&[usize], Position),
-        collapsed_neighbour: (usize, Position),
+        (possible_tiles, possible_tiles_pos): (&[u8], Position),
+        collapsed_neighbour: (u8, Position),
         tiles: &[T],
-    ) -> [usize; C] {
-        let mut indices = [usize::MAX; C];
+    ) -> [u8; C] {
+        let mut indices = [u8::MAX; C];
 
         let iter = possible_tiles
             .iter()
@@ -66,15 +66,15 @@ pub trait Constraint<T> {
     /// * `tiles` - All actual possible tiles. This can be used to map the tile index to the actual tile for more complex logic
     fn valid(
         &self,
-        tile_to_check: (usize, Position),
-        collapsed_neighbour: (usize, Position),
+        tile_to_check: (u8, Position),
+        collapsed_neighbour: (u8, Position),
         tiles: &[T],
     ) -> bool;
 }
 
 /// A [Constraint] which defines what tiles can be neighboured to each other.
 pub struct PossibleNeighbours {
-    allowed_neighbours: Vec<(usize, usize)>
+    allowed_neighbours: Vec<(u8, u8)>
 }
 
 impl PossibleNeighbours {
@@ -82,7 +82,7 @@ impl PossibleNeighbours {
         allowed_neighbours: impl IntoIterator<Item = (T, T)>,
         all_tiles: &[T]
     ) -> Self {
-        let get_index = |tile: T| all_tiles.iter().position(|t| *t == tile).expect("The tile should be in the possible tiles");
+        let get_index = |tile: T| all_tiles.iter().position(|t| *t == tile).expect("The tile should be in the possible tiles") as u8;
 
         PossibleNeighbours {
             allowed_neighbours: allowed_neighbours
@@ -96,8 +96,8 @@ impl PossibleNeighbours {
 impl<T> Constraint<T> for PossibleNeighbours {
     fn valid(
         &self,
-        (tile, _): (usize, Position),
-        (neighbour, _): (usize, Position),
+        (tile, _): (u8, Position),
+        (neighbour, _): (u8, Position),
         _tiles: &[T]
     ) -> bool {
         self.allowed_neighbours

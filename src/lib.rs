@@ -89,13 +89,13 @@ impl<const C: usize, T: Clone> WaveFunctionCollapse<C, T> {
             .collect()
     }
 
-    fn choose_next_index(&mut self, possible_indices: &[usize]) -> usize {
+    fn choose_next_index(&mut self, possible_indices: &[u8]) -> u8 {
         match self.weights {
             Some(weights) => {
                 let mut possible_weights = [0.0; C];
 
                 for (i, index) in possible_indices.iter().enumerate() {
-                    possible_weights[i] = weights[*index];
+                    possible_weights[i] = weights[*index as usize];
                 }
 
                 let possible_weights = &possible_weights[0..possible_indices.len()];

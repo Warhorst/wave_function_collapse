@@ -46,7 +46,7 @@ impl<const C: usize> Board<C> {
     }
 
     /// Collapse the cell at the given position and set its tile index to the given one
-    pub fn collapse_position(&mut self, position: Position, index: usize) {
+    pub fn collapse_position(&mut self, position: Position, index: u8) {
         self.get_cell_mut(position).collapse(index);
         self.not_collapsed_positions -= 1;
     }
@@ -81,7 +81,7 @@ impl<const C: usize> Board<C> {
                 all_tiles
             );
 
-            if new_indices[0] == usize::MAX {
+            if new_indices[0] == u8::MAX {
                 // todo better error handling
                 panic!("No new indices could be determined")
             }
@@ -136,6 +136,6 @@ impl<const C: usize> Board<C> {
     pub fn get_collapsed_indices(&self) -> impl Iterator<Item=(Position, usize)> + '_ {
         p!(0, 0)
             .iter_to(p!(self.width - 1, self.height - 1))
-            .map(|pos| (pos, self.get_cell(pos).get_collapsed_index()))
+            .map(|pos| (pos, self.get_cell(pos).get_collapsed_index() as usize))
     }
 }
