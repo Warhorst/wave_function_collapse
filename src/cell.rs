@@ -18,7 +18,7 @@ impl Cell {
     pub fn new(num_tiles: usize) -> Self {
         Cell {
             entropy: num_tiles,
-            tile_indices: BitArray::from_indices(0..num_tiles),
+            tile_indices: BitArray::from_indices((0..num_tiles).into_iter().map(|index| index as u8)),
         }
     }
 
@@ -27,7 +27,7 @@ impl Cell {
     }
 
     pub fn collapse(&mut self, index: usize) {
-        self.tile_indices[0] = index;
+        self.tile_indices = BitArray::from_indices([index as u8]);
         self.entropy = 1;
     }
 
