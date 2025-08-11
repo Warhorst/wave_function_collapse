@@ -30,7 +30,7 @@ pub struct WaveFunctionCollapse<const C: usize, T: Clone> {
     weights: Option<[f32; C]>,
 }
 
-impl<const C: usize, T: Clone> WaveFunctionCollapse<C, T> {
+impl<const C: usize, T> WaveFunctionCollapse<C, T> where T: Clone {
     pub fn new(
         width: usize,
         height: usize,
@@ -69,7 +69,7 @@ impl<const C: usize, T: Clone> WaveFunctionCollapse<C, T> {
         self
     }
 
-    /// Attempting to perform a wfc with more tiles than C results in a crash
+    /// Collapse the WFC until no more tiles are not collapsed.
     pub fn collapse(mut self) -> Vec<(Position, T)> {
         while !self.board.collapsed() {
             let (pos, cell) = match self.board.min_non_collapsed {
@@ -105,6 +105,26 @@ impl<const C: usize, T: Clone> WaveFunctionCollapse<C, T> {
                 self.random.choose_weighted(possible_weights, possible_indices)
             }
             None => self.random.choose(possible_indices)
+        }
+    }
+}
+
+impl <const C: usize, T> WaveFunctionCollapse<C, T> where T: Clone + PartialEq {
+    /// Collapse the board partially with the provided tiles.
+    ///
+    /// This will at first collapse all positions and afterward propagate all the changes
+    /// to their neighbour positions. This allows for results that would otherwise be impossible
+    /// due to the constraints. It might render the WFC impossible to solve.
+    pub fn collapse_tiles(&mut self, tiles: impl IntoIterator<Item=(Position, T)>) {
+        let tiles = tiles.into_iter().collect::<Vec<_>>();
+        let get_tile_index = |tile: &T| self.tiles.iter().enumerate().find(|(_, t)| *t == tile).unwrap().0 as u8;
+
+        for (pos, t) in &tiles {
+            self.board.collapse_position(*pos, get_tile_index(t));
+        }
+
+        for (pos, _) in tiles {
+            self.board.propagate(pos, &self.tile_constraints, &self.tiles)
         }
     }
 }
