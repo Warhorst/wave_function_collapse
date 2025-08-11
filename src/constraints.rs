@@ -1,11 +1,10 @@
 use pad::position::Position;
-use crate::board::Board;
 
-pub (crate) struct TileConstraints<const C: usize, T> {
-    constraints: Vec<Box<dyn Constraint<C, T>>>
+pub (crate) struct TileConstraints<T> {
+    constraints: Vec<Box<dyn Constraint<T>>>
 }
 
-impl<const C: usize, T> Default for TileConstraints<C, T> {
+impl<T> Default for TileConstraints<T> {
     fn default() -> Self {
         TileConstraints {
             constraints: vec![]
@@ -13,16 +12,15 @@ impl<const C: usize, T> Default for TileConstraints<C, T> {
     }
 }
 
-impl<const C: usize, T> TileConstraints<C, T> {
-    pub(crate) fn add_constraint(&mut self, constraint: impl Constraint<C, T> + 'static) {
+impl<T> TileConstraints<T> {
+    pub(crate) fn add_constraint(&mut self, constraint: impl Constraint<T> + 'static) {
         self.constraints.push(Box::new(constraint));
     }
 
-    pub fn get_possible_indices(
+    pub fn get_possible_indices<const C: usize>(
         &self,
         (possible_tiles, possible_tiles_pos): (&[u8], Position),
         collapsed_neighbour: (u8, Position),
-        board: &Board<C>,
         tiles: &[T]
     ) -> [u8; C] {
         let mut indices = [u8::MAX; C];
@@ -34,7 +32,6 @@ impl<const C: usize, T> TileConstraints<C, T> {
                 .all(|c| c.valid(
                     (**index, possible_tiles_pos),
                     collapsed_neighbour,
-                    board,
                     tiles,
                 ))
             );
@@ -55,21 +52,23 @@ impl<const C: usize, T> TileConstraints<C, T> {
 //  I could store all the collapsed positions of the board in a vector and give a reference to them
 //  into the constraints, so I could create even more complex constraints + This would make a WFC iterator possible
 
-// todo I am not super happy with this. The board is actually an internal representation of the WFCs data
-//  and should not be exposed like that (its module must be public too because of this)
+// todo maybe I should provide also the other neighbours, even if they are not collapsed
 
-pub trait Constraint<const C: usize, T> {
+pub trait Constraint<T> {
     /// Check for a specific tile and its given collapsed neighbour if it would be a valid
     /// remaining choice.
+    /// Only the surroundings of the tile to check are taken into consideration for the validation. Some kind
+    /// of global constraint (which for example could access every cell in the current state) can easily lead
+    /// to dead ends. The parameters and capabilities are therefore, by design, sparse.
+    ///
+    /// # Parameters
     /// * `tile_to_check` - The tile index and its position which I want to know would be valid according to this constraint
     /// * `collapsed_neighbour` - The neighbour tile index and its position which just collapsed
-    /// * `board` - The board which contains all collapsed and partially collapsed cells
     /// * `tiles` - All actual possible tiles. This can be used to map the tile index to the actual tile for more complex logic
     fn valid(
         &self,
         tile_to_check: (u8, Position),
         collapsed_neighbour: (u8, Position),
-        board: &Board<C>,
         tiles: &[T]
     ) -> bool;
 }
@@ -95,12 +94,11 @@ impl PossibleNeighbours {
     }
 }
 
-impl<const C: usize, T> Constraint<C, T> for PossibleNeighbours {
+impl<T> Constraint<T> for PossibleNeighbours {
     fn valid(
         &self,
         (tile, _): (u8, Position),
         (neighbour, _): (u8, Position),
-        _board: &Board<C>,
         _tiles: &[T]
     ) -> bool {
         self.allowed_neighbours

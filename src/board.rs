@@ -57,7 +57,7 @@ impl<const C: usize> Board<C> {
     pub (crate) fn propagate<T>(
         &mut self,
         collapsed_position: Position,
-        tile_constraints: &TileConstraints<C, T>,
+        tile_constraints: &TileConstraints<T>,
         all_tiles: &[T]
     ) {
         // todo try a queue
@@ -77,10 +77,9 @@ impl<const C: usize> Board<C> {
 
             let cell = self.get_cell(pos);
             let cell_indices = cell.get_possible_indices();
-            let new_indices = tile_constraints.get_possible_indices(
+            let new_indices = tile_constraints.get_possible_indices::<C>(
                 (&cell_indices, pos),
                 (collapsed_tile, collapsed_position),
-                &self,
                 all_tiles,
             );
 
