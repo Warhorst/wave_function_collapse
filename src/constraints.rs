@@ -17,13 +17,22 @@ impl<T> TileConstraints<T> {
         self.constraints.push(Box::new(constraint));
     }
 
-    pub fn get_possible_indices<const C: usize>(
+    pub fn get_possible_indices<'a, const C: usize>(
         &self,
-        (possible_tiles, possible_tiles_pos): (&[u8], Position),
-        collapsed_neighbour: (u8, Position),
+        (possible_tiles, possible_tiles_pos): (&'a [u8], Position),
+        neighbours_iter: impl IntoIterator<Item=(&'a [u8], Position)>,
         tiles: &[T]
-    ) -> [u8; C] {
+    ) -> PossibleIndices<C> {
+        let mut neighbours: [(&[u8], Position); 4] = [(&[], Position::default()); 4];
+        let mut num_neighbours = 0;
+
+        for (i, (possible_tiles, pos)) in neighbours_iter.into_iter().enumerate() {
+            neighbours[i] = (possible_tiles, pos);
+            num_neighbours += 1;
+        }
+
         let mut indices = [u8::MAX; C];
+        let mut entropy = 0;
 
         let iter = possible_tiles
             .iter()
@@ -31,28 +40,40 @@ impl<T> TileConstraints<T> {
                 .iter()
                 .all(|c| c.valid(
                     (**index, possible_tiles_pos),
-                    collapsed_neighbour,
+                    &neighbours[0..num_neighbours],
                     tiles,
                 ))
             );
 
         for (i, index) in iter.enumerate() {
-            indices[i] = *index
+            indices[i] = *index;
+            entropy += 1;
         }
 
-        indices
+        PossibleIndices {
+            indices,
+            entropy
+        }
+    }
+}
+
+pub (crate) struct PossibleIndices<const C: usize> {
+    indices: [u8; C],
+    entropy: u8
+}
+
+impl<const C: usize> PossibleIndices<C> {
+    pub fn get(&self) -> &[u8] {
+        &self.indices[0..self.entropy as usize]
     }
 }
 
 // todo Things I want as possible constraints:
 //  - The classic color constraint
-//  - The borders (or some other position) must be a specific tile
 //  - Simple neighbourhood, just like currently
 //  - Directional neighbour restrictions, like the original coast example
 //  I could store all the collapsed positions of the board in a vector and give a reference to them
 //  into the constraints, so I could create even more complex constraints + This would make a WFC iterator possible
-
-// todo maybe I should provide also the other neighbours, even if they are not collapsed
 
 pub trait Constraint<T> {
     /// Check for a specific tile and its given collapsed neighbour if it would be a valid
@@ -63,12 +84,14 @@ pub trait Constraint<T> {
     ///
     /// # Parameters
     /// * `tile_to_check` - The tile index and its position which I want to know would be valid according to this constraint
-    /// * `collapsed_neighbour` - The neighbour tile index and its position which just collapsed
+    /// * `neighbours` - The possible tiles and their positions of all neighbours of the tile to check. 
     /// * `tiles` - All actual possible tiles. This can be used to map the tile index to the actual tile for more complex logic
+    /// 
+    /// Returns true if the tile to check could be placed on this position, according to this constraint.
     fn valid(
         &self,
         tile_to_check: (u8, Position),
-        collapsed_neighbour: (u8, Position),
+        neighbours: &[(&[u8], Position)],
         tiles: &[T]
     ) -> bool;
 }
@@ -98,11 +121,15 @@ impl<T> Constraint<T> for PossibleNeighbours {
     fn valid(
         &self,
         (tile, _): (u8, Position),
-        (neighbour, _): (u8, Position),
+        neighbours: &[(&[u8], Position)],
         _tiles: &[T]
     ) -> bool {
-        self.allowed_neighbours
-            .iter()
-            .any(|(i0, i1)| tile == *i0 && neighbour == *i1 || tile == *i1 && neighbour == *i0)
+        // for every neighbour, one possible tile must match with the current tile
+        neighbours
+            .into_iter()
+            .all(|(nts, _)| nts
+                .iter()
+                .any(|nt| self.allowed_neighbours.contains(&(tile, *nt)) || self.allowed_neighbours.contains(&(*nt, tile)))
+            )
     }
 }

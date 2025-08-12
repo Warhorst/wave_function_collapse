@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use pad::p;
 use pad::position::Position;
 use crate::cell::Cell;
@@ -17,7 +18,10 @@ pub struct Board<const C: usize> {
     not_collapsed_positions: usize,
     /// Caches the best (lowest entropy) next cell to collapse which might was found when collapsing
     /// If no min next cell is known, the whole board has to be searched for the lowest entropy position
-    pub min_non_collapsed: Option<(Position, Cell<C>)>
+    pub min_non_collapsed: Option<(Position, Cell<C>)>,
+    /// The preallocated queue which will be used to hold positions to propagate next
+    /// in the propagation step.
+    propagation_queue: VecDeque<Position>
 }
 
 impl<const C: usize> Board<C> {
@@ -36,7 +40,8 @@ impl<const C: usize> Board<C> {
             height,
             cells,
             not_collapsed_positions: width * height,
-            min_non_collapsed: None
+            min_non_collapsed: None,
+            propagation_queue: VecDeque::new()
         }
     }
 
@@ -60,57 +65,70 @@ impl<const C: usize> Board<C> {
         tile_constraints: &TileConstraints<T>,
         all_tiles: &[T]
     ) {
-        // todo try a queue
-        
-        let collapsed_tile = self.get_cell(collapsed_position).get_collapsed_index();
+        // todo this gets quite complex. Refactor or add comments to explain the blocks
+        self.propagation_queue.push_back(collapsed_position);
 
-        for pos in collapsed_position.cardinal_neighbours() {
-            // cover the edges of the board
-            if !self.pos_in_bounds(pos) {
-                continue;
-            }
+        while !self.propagation_queue.is_empty() {
+            let collapsed_position = self.propagation_queue.pop_front().unwrap();
 
-            // ignore collapsed cells
-            if self.get_cell(pos).is_collapsed() {
-                continue;
-            }
-
-            let cell = self.get_cell(pos);
-            let cell_indices = cell.get_possible_indices();
-            let new_indices = tile_constraints.get_possible_indices::<C>(
-                (&cell_indices, pos),
-                (collapsed_tile, collapsed_position),
-                all_tiles,
-            );
-
-            if new_indices[0] == u8::MAX {
-                // todo better error handling
-                panic!("No new indices could be determined")
-            }
-
-            self.get_cell_mut(pos).set_indices(new_indices);
-
-            let cell = self.get_cell(pos);
-
-            if cell.is_collapsed() {
-                // if the best known position to collapse next is now collapsed, clear
-                // it so a new position can be determined
-                if let Some((p, _)) = self.min_non_collapsed && p == pos {
-                    self.min_non_collapsed = None
+            for pos in collapsed_position.cardinal_neighbours() {
+                // cover the edges of the board
+                if !self.pos_in_bounds(pos) {
+                    continue;
                 }
 
-                self.not_collapsed_positions -= 1;
-                self.propagate(pos, tile_constraints, all_tiles)
-            } else {
-                // update the cache with the best next cell
-                self.min_non_collapsed = Some(match self.min_non_collapsed {
-                    // the current cell now has a lower entropy than the current min cell, overwrite
-                    Some((_, c)) if cell.entropy < c.entropy => (pos, *cell),
-                    // the current cell is not better, keep the same vale
-                    Some((p, c)) => (p, c),
-                    // no min value is set, use the current cell
-                    None => (pos, *cell)
-                });
+                // ignore collapsed cells
+                if self.get_cell(pos).is_collapsed() {
+                    continue;
+                }
+
+                let neighbours = pos.cardinal_neighbours()
+                    .into_iter()
+                    .filter(|p| self.pos_in_bounds(*p))
+                    .map(|p| (self.get_cell(p).get_possible_indices(), p));
+
+                let cell = self.get_cell(pos);
+                let cell_indices = cell.get_possible_indices();
+                let possible_indices = tile_constraints.get_possible_indices::<C>(
+                    (&cell_indices, pos),
+                    neighbours,
+                    all_tiles,
+                );
+                let new_indices = possible_indices.get();
+
+                if new_indices.is_empty() {
+                    // todo better error handling
+                    panic!("No new indices could be determined")
+                }
+
+                if cell_indices != new_indices {
+                    self.propagation_queue.push_back(pos);
+                }
+
+                self.get_cell_mut(pos).set_indices(new_indices.into_iter().copied());
+
+                let cell = self.get_cell(pos);
+
+                if cell.is_collapsed() {
+                    // if the best known position to collapse next is now collapsed, clear
+                    // it so a new position can be determined
+                    if let Some((p, _)) = self.min_non_collapsed && p == pos {
+                        self.min_non_collapsed = None
+                    }
+
+                    self.not_collapsed_positions -= 1;
+                    //self.propagate(pos, tile_constraints, all_tiles)
+                } else {
+                    // update the cache with the best next cell
+                    self.min_non_collapsed = Some(match self.min_non_collapsed {
+                        // the current cell now has a lower entropy than the current min cell, overwrite
+                        Some((_, c)) if cell.entropy < c.entropy => (pos, *cell),
+                        // the current cell is not better, keep the same vale
+                        Some((p, c)) => (p, c),
+                        // no min value is set, use the current cell
+                        None => (pos, *cell)
+                    });
+                }
             }
         }
     }
