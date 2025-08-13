@@ -93,14 +93,14 @@ impl<const C: usize> Board<C> {
 
                 let cell = self.get_cell(pos);
                 let cell_indices = cell.get_possible_indices();
-                let possible_indices = tile_constraints.get_possible_indices::<C>(
+                let cell_update = tile_constraints.update_cell::<C>(
                     (&cell_indices, pos),
                     neighbours,
                     weights,
                     all_tiles,
                 );
-                let new_indices = possible_indices.get_indices();
-                let new_weights = possible_indices.get_weights();
+                let new_indices = cell_update.new_indices();
+                let new_weights = cell_update.new_weights();
 
                 if new_indices.is_empty() {
                     return Err(WfcError::CellHasZeroEntropy(pos))

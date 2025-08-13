@@ -1,5 +1,6 @@
 use pad::position::Position;
 
+/// Wrapper around the list of [Constraint]s which are configured in the [crate::Wfc].
 pub (crate) struct TileConstraints<T> {
     constraints: Vec<Box<dyn Constraint<T>>>
 }
@@ -17,13 +18,19 @@ impl<T> TileConstraints<T> {
         self.constraints.push(Box::new(constraint));
     }
 
-    pub fn get_possible_indices<'a, const C: usize>(
+    /// Determine the next values for a cell based on the set constraints.
+    /// * `(cell_tiles, cell_position)` - The currently possible tiles and the position on the board of the cell to check.
+    /// * `neighbours_iter` - An iterator over all the neighbours around the cell to check.
+    /// * `all_weights` - The weights in the wfc settings which are used as the base to determine the next cell weights.
+    /// * `tiles` - A slice of all tiles set in the wfc. Used to access a reference of a tile at a given index.
+    pub fn update_cell<'a, const C: usize>(
         &self,
-        (possible_tiles, possible_tiles_pos): (&'a [u8], Position),
+        (cell_tiles, cell_position): (&'a [u8], Position),
         neighbours_iter: impl IntoIterator<Item=(&'a [u8], Position)>,
         all_weights: &[f32],
         tiles: &[T]
-    ) -> PossibleIndices<C> {
+    ) -> CellUpdate<C> {
+        // collect all the neighbours in an array
         let mut neighbours: [(&[u8], Position); 4] = [(&[], Position::default()); 4];
         let mut num_neighbours = 0;
 
@@ -32,54 +39,65 @@ impl<T> TileConstraints<T> {
             num_neighbours += 1;
         }
 
-        let mut indices = [u8::MAX; C];
-        let mut weights = [f32::MAX; C];
-        let mut entropy = 0;
+        // initialize the new indices and weights
+        let mut new_indices = [u8::MAX; C];
+        let mut new_weights = [f32::MAX; C];
+        let mut new_entropy = 0;
 
-        'outer: for (i, index) in possible_tiles.iter().enumerate() {
+        // outer loop which iterates over all the currently possible tile indices
+        // in the cell (also going wild by using a loop tag)
+        'outer: for (i, index) in cell_tiles.iter().enumerate() {
+            // the new weight for the currently checked tile index
             let mut weight = all_weights[i];
 
+            // inner loop to check if all constraints are fulfilled
             for c in self.constraints.iter() {
                 let valid = c.valid(
-                    (*index, possible_tiles_pos),
+                    (*index, cell_position),
                     &neighbours[0..num_neighbours],
                     tiles,
                 );
 
-                // todo add some comments and update the doc
-
                 match valid {
+                    // the constraint was fulfilled, so update the current weight with the modifier
+                    // from the constraint
                     Some(weight_modifier) => weight *= weight_modifier,
+                    // The constraint was not fulfilled, so go to the next iteration (tile index) of the other loop.
+                    // This will therefore skip updating the new indices, which means this tile index will not
+                    // be used.
                     None => continue 'outer
                 }
             }
 
-            indices[entropy as usize] = *index;
-            weights[entropy as usize] = weight;
-            entropy += 1;
+            // Update the new indices and weight. As the entropy
+            // increments, it can also be used as the index here
+            new_indices[new_entropy as usize] = *index;
+            new_weights[new_entropy as usize] = weight;
+            new_entropy += 1;
         }
 
-        PossibleIndices {
-            indices,
-            weights,
-            entropy
+        CellUpdate {
+            new_indices,
+            new_weights,
+            new_entropy
         }
     }
 }
 
-pub (crate) struct PossibleIndices<const C: usize> {
-    indices: [u8; C],
-    weights: [f32; C],
-    entropy: u8
+/// Contains the next values a [crate::cell::Cell] will have.
+pub (crate) struct CellUpdate<const C: usize> {
+    new_indices: [u8; C],
+    new_weights: [f32; C],
+    new_entropy: u8
 }
 
-impl<const C: usize> PossibleIndices<C> {
-    pub fn get_indices(&self) -> &[u8] {
-        &self.indices[0..self.entropy as usize]
+impl<const C: usize> CellUpdate<C> {
+    pub fn new_indices(&self) -> &[u8] {
+        &self.new_indices[0..self.new_entropy as usize]
     }
 
-    pub fn get_weights(&self) -> &[f32] {
-        &self.weights[0..self.entropy as usize]
+    pub fn new_weights(&self) -> &[f32] {
+        &self.new_weights[0..self.new_entropy as usize]
     }
 }
 
