@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use wave_function_collapse::{constraints::PossibleNeighbours, WaveFunctionCollapse};
 use crate::Tile::*;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use wave_function_collapse::{constraints::PossibleNeighbours, WfcBuilder};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 enum Tile {
@@ -21,14 +21,17 @@ pub fn simple(c: &mut Criterion) {
               (Forest, Forest),
         ], &tiles);
 
-        WaveFunctionCollapse::<3, Tile>::new(
+        WfcBuilder::<3, Tile>::new(
             50,
             50,
             tiles
         )
             .with_constraint(possible_neighbours)
             .with_seed(42)
-            .collapse();
+            .build()
+            .unwrap()
+            .collapse()
+            .unwrap();
     }));
 }
 
@@ -47,17 +50,19 @@ pub fn multi_dimension(c: &mut Criterion) {
                   (Forest, Forest),
             ], &tiles);
 
-            WaveFunctionCollapse::<3, Tile>::new(
+            WfcBuilder::<3, Tile>::new(
                 *dim,
                 *dim,
                 tiles
             )
                 .with_constraint(possible_neighbours)
                 .with_seed(42)
-                .collapse();
+                .build()
+                .unwrap()
+                .collapse()
+                .unwrap();
         }));
     }
-
 }
 
 criterion_group!(benches, simple, multi_dimension);

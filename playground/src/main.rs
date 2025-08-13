@@ -5,7 +5,7 @@ use Tile::*;
 
 use appcui::prelude::*;
 use pad::position::Position;
-use wave_function_collapse::{constraints::PossibleNeighbours, WaveFunctionCollapse};
+use wave_function_collapse::{constraints::PossibleNeighbours, WfcBuilder};
 use crate::seed_dialog::SeedDialog;
 use crate::weights_dialog::WeightsDialog;
 
@@ -213,7 +213,7 @@ fn collapse(
           (Forest, Forest),
       ], &tiles);
 
-    WaveFunctionCollapse::<3, Tile>::new(
+    WfcBuilder::<3, Tile>::new(
         settings.width,
         settings.height,
         tiles,
@@ -221,6 +221,8 @@ fn collapse(
         .with_constraint(possible_neighbours)
         .with_weights(settings.weights.iter().copied())
         .with_seed(settings.seed.clone())
+        .build()
+        .unwrap()
         .collapse()
         .unwrap()
 }

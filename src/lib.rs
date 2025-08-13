@@ -16,7 +16,8 @@ use crate::constraints::{Constraint, TileConstraints};
 //  - rotating tiles (this might be possible using a trait)
 //  - MAYBE Providing an iterator, so I can watch the wfc work
 
-pub struct WaveFunctionCollapse<const C: usize, T: Clone> {
+/// The builder for a [Wfc].
+pub struct WfcBuilder<const C: usize, T: Clone> {
     board: Board<C>,
     tiles: Vec<T>,
     tile_constraints: TileConstraints<T>,
@@ -24,7 +25,7 @@ pub struct WaveFunctionCollapse<const C: usize, T: Clone> {
     weights: Option<[f32; C]>,
 }
 
-impl<const C: usize, T> WaveFunctionCollapse<C, T> where T: Clone {
+impl<const C: usize, T> WfcBuilder<C, T> where T: Clone {
     pub fn new(
         width: usize,
         height: usize,
@@ -32,7 +33,7 @@ impl<const C: usize, T> WaveFunctionCollapse<C, T> where T: Clone {
     ) -> Self {
         let board = Board::<C>::new(width, height, tiles.len());
 
-        WaveFunctionCollapse {
+        WfcBuilder {
             board,
             tiles,
             tile_constraints: TileConstraints::default(),
@@ -62,15 +63,35 @@ impl<const C: usize, T> WaveFunctionCollapse<C, T> where T: Clone {
         self.tile_constraints.add_constraint(constraint);
         self
     }
-
-    /// Collapse the WFC until no more tiles are not collapsed.
-    pub fn collapse(mut self) -> Result<Vec<(Position, T)>, WfcError> {
-        // todo This is kinda off here. I should create a builder which validates
-        //  the wfc settings when building.
+    
+    /// Validate the input and create a [Wfc].
+    pub fn build(self) -> Result<Wfc<C, T>, WfcError> {
         if self.tiles.len() > C {
             return Err(WfcError::TooManyTiles {max: C, was: self.tiles.len()})
         }
+        
+        Ok(Wfc {
+            board: self.board,
+            tiles: self.tiles,
+            tile_constraints: self.tile_constraints,
+            random: self.random,
+            weights: self.weights
+        })
+    }
+}
 
+/// The struct which performs the wave function collapse.
+pub struct Wfc<const C: usize, T: Clone> {
+    board: Board<C>,
+    tiles: Vec<T>,
+    tile_constraints: TileConstraints<T>,
+    random: Random,
+    weights: Option<[f32; C]>,
+}
+
+impl<const C: usize, T> Wfc<C, T> where T: Clone {
+    /// Collapse the WFC until no more tiles are not collapsed.
+    pub fn collapse(mut self) -> Result<Vec<(Position, T)>, WfcError> {
         while !self.board.collapsed() {
             let (pos, cell) = match self.board.min_non_collapsed {
                 // Some best next cell is already known. Use it and clear the cache
@@ -109,7 +130,7 @@ impl<const C: usize, T> WaveFunctionCollapse<C, T> where T: Clone {
     }
 }
 
-impl <const C: usize, T> WaveFunctionCollapse<C, T> where T: Clone + PartialEq {
+impl <const C: usize, T> Wfc<C, T> where T: Clone + PartialEq {
     /// Collapse the board partially with the provided tiles.
     ///
     /// This will at first collapse all positions and afterward propagate all the changes
