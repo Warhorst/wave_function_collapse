@@ -82,6 +82,7 @@ impl<const C: usize, T> WfcBuilder<C, T> where T: Clone {
             tiles: self.tiles,
             tile_constraints: self.tile_constraints,
             random: self.random,
+            weights: self.weights
         })
     }
 }
@@ -92,6 +93,7 @@ pub struct Wfc<const C: usize, T: Clone> {
     tiles: Vec<T>,
     tile_constraints: TileConstraints<T>,
     random: Random,
+    weights: [f32; C],
 }
 
 impl<const C: usize, T> Wfc<C, T> where T: Clone {
@@ -109,7 +111,12 @@ impl<const C: usize, T> Wfc<C, T> where T: Clone {
             let weights = cell.get_tile_weights();
             let index = self.choose_next_index(possible_indices, weights);
             self.board.collapse_position(pos, index);
-            self.board.propagate(pos, &self.tile_constraints, &self.tiles)?;
+            self.board.propagate(
+                pos,
+                &self.tile_constraints,
+                &self.weights,
+                &self.tiles
+            )?;
         }
 
         Ok(self.board
@@ -142,7 +149,12 @@ impl <const C: usize, T> Wfc<C, T> where T: Clone + PartialEq {
         }
 
         for (pos, _) in tiles {
-            self.board.propagate(pos, &self.tile_constraints, &self.tiles)?
+            self.board.propagate(
+                pos,
+                &self.tile_constraints,
+                &self.weights,
+                &self.tiles
+            )?
         }
 
         Ok(())

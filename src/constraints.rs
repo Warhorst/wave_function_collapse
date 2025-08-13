@@ -19,8 +19,9 @@ impl<T> TileConstraints<T> {
 
     pub fn get_possible_indices<'a, const C: usize>(
         &self,
-        (possible_tiles, tile_weights, possible_tiles_pos): (&'a [u8], &'a[f32], Position),
+        (possible_tiles, possible_tiles_pos): (&'a [u8], Position),
         neighbours_iter: impl IntoIterator<Item=(&'a [u8], Position)>,
+        all_weights: &[f32],
         tiles: &[T]
     ) -> PossibleIndices<C> {
         let mut neighbours: [(&[u8], Position); 4] = [(&[], Position::default()); 4];
@@ -36,10 +37,7 @@ impl<T> TileConstraints<T> {
         let mut entropy = 0;
 
         'outer: for (i, index) in possible_tiles.iter().enumerate() {
-            // todo updating a cell multiple times with modifiers lower 0 would continually
-            //  lower its own weight. So when determining the new weights, the initial value
-            //  must be the original weights instead
-            let mut weight = tile_weights[i];
+            let mut weight = all_weights[i];
 
             for c in self.constraints.iter() {
                 let valid = c.valid(

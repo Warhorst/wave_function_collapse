@@ -66,6 +66,7 @@ impl<const C: usize> Board<C> {
         &mut self,
         collapsed_position: Position,
         tile_constraints: &TileConstraints<T>,
+        weights: &[f32],
         all_tiles: &[T]
     ) -> Result<(), WfcError> {
         // todo this gets quite complex. Refactor or add comments to explain the blocks
@@ -92,10 +93,10 @@ impl<const C: usize> Board<C> {
 
                 let cell = self.get_cell(pos);
                 let cell_indices = cell.get_possible_indices();
-                let cell_weights = cell.get_tile_weights();
                 let possible_indices = tile_constraints.get_possible_indices::<C>(
-                    (&cell_indices, cell_weights, pos),
+                    (&cell_indices, pos),
                     neighbours,
+                    weights,
                     all_tiles,
                 );
                 let new_indices = possible_indices.get_indices();
