@@ -31,10 +31,11 @@ impl<const C: usize> Board<C> {
         width: usize,
         height: usize,
         num_tiles: usize,
+        weights: [f32; C]
     ) -> Self {
         let cells = (0..(width * height))
             .into_iter()
-            .map(|_| Cell::<C>::new(num_tiles))
+            .map(|_| Cell::<C>::new(num_tiles, &weights))
             .collect();
 
         Board {
@@ -91,12 +92,14 @@ impl<const C: usize> Board<C> {
 
                 let cell = self.get_cell(pos);
                 let cell_indices = cell.get_possible_indices();
+                let cell_weights = cell.get_tile_weights();
                 let possible_indices = tile_constraints.get_possible_indices::<C>(
-                    (&cell_indices, pos),
+                    (&cell_indices, cell_weights, pos),
                     neighbours,
                     all_tiles,
                 );
-                let new_indices = possible_indices.get();
+                let new_indices = possible_indices.get_indices();
+                let new_weights = possible_indices.get_weights();
 
                 if new_indices.is_empty() {
                     return Err(WfcError::CellHasZeroEntropy(pos))
@@ -106,7 +109,9 @@ impl<const C: usize> Board<C> {
                     self.propagation_queue.push_back(pos);
                 }
 
-                self.get_cell_mut(pos).set_indices(new_indices.into_iter().copied());
+                let cell_mut = self.get_cell_mut(pos);
+                cell_mut.set_indices(new_indices.into_iter().copied());
+                cell_mut.set_weights(new_weights.into_iter().copied());
 
                 let cell = self.get_cell(pos);
 

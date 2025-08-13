@@ -1,7 +1,7 @@
-use std::hash::{DefaultHasher, Hash, Hasher};
 use rand::distributions::WeightedIndex;
 use rand::prelude::{Distribution, StdRng};
-use rand::{Rng, SeedableRng};
+use rand::SeedableRng;
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 /// Provides random numbers to the WFC.
 pub struct Random {
@@ -23,14 +23,6 @@ impl Random {
         Random {
             rng: StdRng::seed_from_u64(seed)
         }
-    }
-
-    pub fn choose<T: Copy>(
-        &mut self,
-        choices: &[T],
-    ) -> T {
-        let index = self.rng.gen_range(0..choices.len());
-        choices[index]
     }
 
     pub fn choose_weighted<T: Copy>(

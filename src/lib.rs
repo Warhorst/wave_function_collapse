@@ -18,11 +18,12 @@ use crate::constraints::{Constraint, TileConstraints};
 
 /// The builder for a [Wfc].
 pub struct WfcBuilder<const C: usize, T: Clone> {
-    board: Board<C>,
+    width: usize,
+    height: usize,
     tiles: Vec<T>,
     tile_constraints: TileConstraints<T>,
     random: Random,
-    weights: Option<[f32; C]>,
+    weights: [f32; C],
 }
 
 impl<const C: usize, T> WfcBuilder<C, T> where T: Clone {
@@ -31,14 +32,13 @@ impl<const C: usize, T> WfcBuilder<C, T> where T: Clone {
         height: usize,
         tiles: Vec<T>,
     ) -> Self {
-        let board = Board::<C>::new(width, height, tiles.len());
-
         WfcBuilder {
-            board,
+            width,
+            height,
             tiles,
             tile_constraints: TileConstraints::default(),
             random: Random::new(),
-            weights: None,
+            weights: [1.0; C],
         }
     }
 
@@ -55,7 +55,7 @@ impl<const C: usize, T> WfcBuilder<C, T> where T: Clone {
             weights[i] = weight;
         }
 
-        self.weights = Some(weights);
+        self.weights = weights;
         self
     }
 
@@ -63,19 +63,25 @@ impl<const C: usize, T> WfcBuilder<C, T> where T: Clone {
         self.tile_constraints.add_constraint(constraint);
         self
     }
-    
+
     /// Validate the input and create a [Wfc].
     pub fn build(self) -> Result<Wfc<C, T>, WfcError> {
         if self.tiles.len() > C {
             return Err(WfcError::TooManyTiles {max: C, was: self.tiles.len()})
         }
-        
+
+        let board = Board::<C>::new(
+            self.width,
+            self.height,
+            self.tiles.len(),
+            self.weights
+        );
+
         Ok(Wfc {
-            board: self.board,
+            board,
             tiles: self.tiles,
             tile_constraints: self.tile_constraints,
             random: self.random,
-            weights: self.weights
         })
     }
 }
@@ -86,7 +92,6 @@ pub struct Wfc<const C: usize, T: Clone> {
     tiles: Vec<T>,
     tile_constraints: TileConstraints<T>,
     random: Random,
-    weights: Option<[f32; C]>,
 }
 
 impl<const C: usize, T> Wfc<C, T> where T: Clone {
@@ -101,7 +106,8 @@ impl<const C: usize, T> Wfc<C, T> where T: Clone {
             };
 
             let possible_indices = cell.get_possible_indices();
-            let index = self.choose_next_index(possible_indices);
+            let weights = cell.get_tile_weights();
+            let index = self.choose_next_index(possible_indices, weights);
             self.board.collapse_position(pos, index);
             self.board.propagate(pos, &self.tile_constraints, &self.tiles)?;
         }
@@ -112,21 +118,12 @@ impl<const C: usize, T> Wfc<C, T> where T: Clone {
             .collect())
     }
 
-    fn choose_next_index(&mut self, possible_indices: &[u8]) -> u8 {
-        match self.weights {
-            Some(weights) => {
-                let mut possible_weights = [0.0; C];
-
-                for (i, index) in possible_indices.iter().enumerate() {
-                    possible_weights[i] = weights[*index as usize];
-                }
-
-                let possible_weights = &possible_weights[0..possible_indices.len()];
-
-                self.random.choose_weighted(possible_weights, possible_indices)
-            }
-            None => self.random.choose(possible_indices)
-        }
+    fn choose_next_index(
+        &mut self,
+        possible_indices: &[u8],
+        tile_weights: &[f32]
+    ) -> u8 {
+        self.random.choose_weighted(tile_weights, possible_indices)
     }
 }
 
