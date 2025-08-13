@@ -3,24 +3,18 @@ mod board;
 mod random;
 mod cell;
 
+use std::error::Error;
+use std::fmt::{Display, Formatter};
 use crate::board::Board;
 use crate::random::Random;
 use pad::position::Position;
 use std::hash::Hash;
 use crate::constraints::{Constraint, TileConstraints};
+
 // todo
 //  - Edge Colors, so no neighbour constraints have to be set manually
 //  - rotating tiles (this might be possible using a trait)
-//  - weights
-//  - MAYBE allowing more complex constraints (this might require fast access to all the collapsed/not collapsed tiles)
 //  - MAYBE Providing an iterator, so I can watch the wfc work
-
-// todo propagation queue idea: The Board holds a queue of positions which need propagation.
-//  In every iteration, if something is in the queue, it will propagate it first
-//  ... and then how do I use this to create an iterator? The propagation might not yield a newly collapsed position. Maybe
-//  I should have a collapsed queue instead
-
-// todo try a precollapse and return an error
 
 pub struct WaveFunctionCollapse<const C: usize, T: Clone> {
     board: Board<C>,
@@ -70,7 +64,13 @@ impl<const C: usize, T> WaveFunctionCollapse<C, T> where T: Clone {
     }
 
     /// Collapse the WFC until no more tiles are not collapsed.
-    pub fn collapse(mut self) -> Vec<(Position, T)> {
+    pub fn collapse(mut self) -> Result<Vec<(Position, T)>, WfcError> {
+        // todo This is kinda off here. I should create a builder which validates
+        //  the wfc settings when building.
+        if self.tiles.len() > C {
+            return Err(WfcError::TooManyTiles {max: C, was: self.tiles.len()})
+        }
+
         while !self.board.collapsed() {
             let (pos, cell) = match self.board.min_non_collapsed {
                 // Some best next cell is already known. Use it and clear the cache
@@ -82,13 +82,13 @@ impl<const C: usize, T> WaveFunctionCollapse<C, T> where T: Clone {
             let possible_indices = cell.get_possible_indices();
             let index = self.choose_next_index(possible_indices);
             self.board.collapse_position(pos, index);
-            self.board.propagate(pos, &self.tile_constraints, &self.tiles);
+            self.board.propagate(pos, &self.tile_constraints, &self.tiles)?;
         }
 
-        self.board
+        Ok(self.board
             .get_collapsed_indices()
             .map(|(pos, index)| (pos, self.tiles[index].clone()))
-            .collect()
+            .collect())
     }
 
     fn choose_next_index(&mut self, possible_indices: &[u8]) -> u8 {
@@ -115,7 +115,7 @@ impl <const C: usize, T> WaveFunctionCollapse<C, T> where T: Clone + PartialEq {
     /// This will at first collapse all positions and afterward propagate all the changes
     /// to their neighbour positions. This allows for results that would otherwise be impossible
     /// due to the constraints. It might render the WFC impossible to solve.
-    pub fn collapse_tiles(&mut self, tiles: impl IntoIterator<Item=(Position, T)>) {
+    pub fn collapse_tiles(&mut self, tiles: impl IntoIterator<Item=(Position, T)>) -> Result<(), WfcError> {
         let tiles = tiles.into_iter().collect::<Vec<_>>();
         let get_tile_index = |tile: &T| self.tiles.iter().enumerate().find(|(_, t)| *t == tile).unwrap().0 as u8;
 
@@ -124,7 +124,34 @@ impl <const C: usize, T> WaveFunctionCollapse<C, T> where T: Clone + PartialEq {
         }
 
         for (pos, _) in tiles {
-            self.board.propagate(pos, &self.tile_constraints, &self.tiles)
+            self.board.propagate(pos, &self.tile_constraints, &self.tiles)?
+        }
+
+        Ok(())
+    }
+}
+
+/// An error for the wave function collapse, which occurs due to configuration errors
+/// or runtime errors.
+#[derive(Debug)]
+pub enum WfcError {
+    /// More tile types are provided than supported by the WFC
+    TooManyTiles {
+        max: usize,
+        was: usize
+    },
+    /// A cell has zero entropy after a propagation, which means no tile
+    /// can be picked for it
+    CellHasZeroEntropy(Position)
+}
+
+impl Error for WfcError {}
+
+impl Display for WfcError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WfcError::TooManyTiles { max, was } => write!(f, "{was} tiles where provided, but only {max} are supported!"),
+            WfcError::CellHasZeroEntropy(pos) => write!(f, "The position {pos:?} has zero entropy and cannot be collapsed!")
         }
     }
 }

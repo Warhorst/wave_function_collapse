@@ -222,4 +222,5 @@ fn collapse(
         .with_weights(settings.weights.iter().copied())
         .with_seed(settings.seed.clone())
         .collapse()
+        .unwrap()
 }

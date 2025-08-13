@@ -72,8 +72,13 @@ impl<const C: usize> PossibleIndices<C> {
 //  - The classic color constraint
 //  - Simple neighbourhood, just like currently
 //  - Directional neighbour restrictions, like the original coast example
-//  I could store all the collapsed positions of the board in a vector and give a reference to them
-//  into the constraints, so I could create even more complex constraints + This would make a WFC iterator possible
+
+// todo the Constraint should not return a bool, but an optional weight modifier.
+//  - Every cell should hold the weights for their tiles
+//  - If the modifier is not None, the weight for that tile gets set accordingly
+//  - The initial weight for every tile is the setting provided to the WFC
+//  This allows for a "Bias Constraint", where based on the neighbours, some tile should have
+//  way higher or lower probability to get picked
 
 pub trait Constraint<T> {
     /// Check for a specific tile and its given collapsed neighbour if it would be a valid

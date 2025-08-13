@@ -3,6 +3,8 @@ use pad::p;
 use pad::position::Position;
 use crate::cell::Cell;
 use crate::constraints::TileConstraints;
+use crate::WfcError;
+// todo Maybe try using a set of not collapsed positions
 
 /// Contains the current state of the WFC with all the cells at their respective positions.
 /// The WFC is done if all positions on the board are collapsed.
@@ -64,7 +66,7 @@ impl<const C: usize> Board<C> {
         collapsed_position: Position,
         tile_constraints: &TileConstraints<T>,
         all_tiles: &[T]
-    ) {
+    ) -> Result<(), WfcError> {
         // todo this gets quite complex. Refactor or add comments to explain the blocks
         self.propagation_queue.push_back(collapsed_position);
 
@@ -97,8 +99,7 @@ impl<const C: usize> Board<C> {
                 let new_indices = possible_indices.get();
 
                 if new_indices.is_empty() {
-                    // todo better error handling
-                    panic!("No new indices could be determined")
+                    return Err(WfcError::CellHasZeroEntropy(pos))
                 }
 
                 if cell_indices != new_indices {
@@ -131,6 +132,8 @@ impl<const C: usize> Board<C> {
                 }
             }
         }
+
+        Ok(())
     }
 
     fn pos_in_bounds(&self, pos: Position) -> bool {
