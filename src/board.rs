@@ -18,6 +18,10 @@ pub struct Board<const C: usize> {
     /// Caches the amount of not already collapsed positions to quickly check
     /// if the whole board is collapsed
     not_collapsed_positions: usize,
+    // todo there might be cases where this does not provide the position with the lowest entropy
+    //  For example, what if there are multiple cells with the lowest possible entropy, I collapse the
+    //  one which is cached here and in the propagation I set a position with a larger entropy as the min,
+    //  as this was the last one I saw. Maybe I need to cache more positions in a map or whatever
     /// Caches the best (lowest entropy) next cell to collapse which might was found when collapsing
     /// If no min next cell is known, the whole board has to be searched for the lowest entropy position
     pub min_non_collapsed: Option<(Position, Cell<C>)>,
@@ -69,28 +73,32 @@ impl<const C: usize> Board<C> {
         weights: &[f32],
         all_tiles: &[T]
     ) -> Result<(), WfcError> {
-        // todo this gets quite complex. Refactor or add comments to explain the blocks
+        // init the propagation queue with the just collapsed position
         self.propagation_queue.push_back(collapsed_position);
 
+        // process the queue until nothing needs propagation anymore
         while !self.propagation_queue.is_empty() {
             let collapsed_position = self.propagation_queue.pop_front().unwrap();
 
+            // go over all the neighbours to check if they can be updated
             for pos in collapsed_position.cardinal_neighbours() {
-                // cover the edges of the board
+                // if on the edge, the neighbour might be out of bounds, so
+                // skip in this case
                 if !self.pos_in_bounds(pos) {
                     continue;
                 }
 
-                // ignore collapsed cells
+                // ignore already collapsed neighbours
                 if self.get_cell(pos).is_collapsed() {
                     continue;
                 }
 
+                // Collect the relevant data from the neighbour cell to
+                // create a cell update for it, which is its next state
                 let neighbours = pos.cardinal_neighbours()
                     .into_iter()
                     .filter(|p| self.pos_in_bounds(*p))
                     .map(|p| (self.get_cell(p).get_possible_indices(), p));
-
                 let cell = self.get_cell(pos);
                 let cell_indices = cell.get_possible_indices();
                 let cell_update = tile_constraints.update_cell::<C>(
@@ -102,17 +110,29 @@ impl<const C: usize> Board<C> {
                 let new_indices = cell_update.new_indices();
                 let new_weights = cell_update.new_weights();
 
+                // If the new indices are empty, it means there is
+                // no tile which fulfills all constraints. This is an error
+                // and is returned to the caller
                 if new_indices.is_empty() {
                     return Err(WfcError::CellHasZeroEntropy(pos))
                 }
 
+                // If the indices changed (which can only mean: there are
+                // now fewer tiles), the cell has now a lower entropy. This
+                // must be propagated to its neighbours, so it is added to the
+                // propagation queue
                 if cell_indices != new_indices {
                     self.propagation_queue.push_back(pos);
                 }
 
+                // update the cell with the values from the cell update
                 let cell_mut = self.get_cell_mut(pos);
                 cell_mut.set_indices(new_indices.into_iter().copied());
                 cell_mut.set_weights(new_weights.into_iter().copied());
+
+                // As the last step in the propagation, update the
+                // min_non_collapsed, which is the best known position
+                // which can be collapsed next
 
                 let cell = self.get_cell(pos);
 

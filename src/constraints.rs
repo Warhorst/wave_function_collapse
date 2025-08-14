@@ -115,7 +115,11 @@ impl<const C: usize> CellUpdate<C> {
 
 pub trait Constraint<T> {
     /// Check for a specific tile and its given collapsed neighbour if it would be a valid
-    /// remaining choice.
+    /// remaining choice.  
+    /// If the tile is valid, it returns a weight modifier. This modifier (alongside the modifiers
+    /// of other constraints) is multiplied with the base weight of the tile to determine the new weight
+    /// for the current cell. **Important:** Returning Some(0.0) is not the same as returning None,
+    /// as the former means the tile is still possible, but now with weight 0.  
     /// Only the surroundings of the tile to check are taken into consideration for the validation. Some kind
     /// of global constraint (which for example could access every cell in the current state) can easily lead
     /// to dead ends. The parameters and capabilities are therefore, by design, sparse.
@@ -124,8 +128,8 @@ pub trait Constraint<T> {
     /// * `tile_to_check` - The tile index and its position which I want to know would be valid according to this constraint
     /// * `neighbours` - The possible tiles and their positions of all neighbours of the tile to check. 
     /// * `tiles` - All actual possible tiles. This can be used to map the tile index to the actual tile for more complex logic
-    /// todo fix doc
-    /// Returns true if the tile to check could be placed on this position, according to this constraint.
+    /// 
+    /// Returns Some(weight_modifier) if the tile to check could be placed on this position, according to this constraint.
     fn valid(
         &self,
         tile_to_check: (u8, Position),
