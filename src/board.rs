@@ -123,6 +123,8 @@ impl<const C: usize> Board<C> {
                 // propagation queue
                 if cell_indices != new_indices {
                     self.propagation_queue.push_back(pos);
+                } else {
+                    continue
                 }
 
                 // update the cell with the values from the cell update
@@ -143,8 +145,8 @@ impl<const C: usize> Board<C> {
                         self.min_non_collapsed = None
                     }
 
+                    // todo why does this sometimes overflow?
                     self.not_collapsed_positions -= 1;
-                    //self.propagate(pos, tile_constraints, all_tiles)
                 } else {
                     // update the cache with the best next cell
                     self.min_non_collapsed = Some(match self.min_non_collapsed {
