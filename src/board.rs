@@ -18,10 +18,12 @@ pub struct Board<const C: usize> {
     /// Caches the amount of not already collapsed positions to quickly check
     /// if the whole board is collapsed
     not_collapsed_positions: usize,
-    // todo there might be cases where this does not provide the position with the lowest entropy
+    // TODO there might be cases where this does not provide the position with the lowest entropy
     //  For example, what if there are multiple cells with the lowest possible entropy, I collapse the
     //  one which is cached here and in the propagation I set a position with a larger entropy as the min,
-    //  as this was the last one I saw. Maybe I need to cache more positions in a map or whatever
+    //  as this was the last one I saw. Maybe I need to cache more positions in a map or whatever.
+    //  Or I should just store the not collapes positions in a set and remove them when they are collapsed,
+    //  so the amount of positions to check shrinks every iteration and I check every possible one.
     /// Caches the best (lowest entropy) next cell to collapse which might was found when collapsing
     /// If no min next cell is known, the whole board has to be searched for the lowest entropy position
     pub min_non_collapsed: Option<(Position, Cell<C>)>,
@@ -38,7 +40,6 @@ impl<const C: usize> Board<C> {
         weights: [f32; C]
     ) -> Self {
         let cells = (0..(width * height))
-            .into_iter()
             .map(|_| Cell::<C>::new(num_tiles, &weights))
             .collect();
 
@@ -102,7 +103,7 @@ impl<const C: usize> Board<C> {
                 let cell = self.get_cell(pos);
                 let cell_indices = cell.get_possible_indices();
                 let cell_update = tile_constraints.update_cell::<C>(
-                    (&cell_indices, pos),
+                    (cell_indices, pos),
                     neighbours,
                     weights,
                     all_tiles,
@@ -129,8 +130,8 @@ impl<const C: usize> Board<C> {
 
                 // update the cell with the values from the cell update
                 let cell_mut = self.get_cell_mut(pos);
-                cell_mut.set_indices(new_indices.into_iter().copied());
-                cell_mut.set_weights(new_weights.into_iter().copied());
+                cell_mut.set_indices(new_indices.iter().copied());
+                cell_mut.set_weights(new_weights.iter().copied());
 
                 // As the last step in the propagation, update the
                 // min_non_collapsed, which is the best known position
@@ -181,11 +182,11 @@ impl<const C: usize> Board<C> {
     }
 
     pub fn get_cell(&self, pos: Position) -> &Cell<C> {
-        self.cells.get(self.width * pos.y as usize + pos.x as usize).expect(format!("A cell at position {:?} should exist", pos).as_str())
+        self.cells.get(self.width * pos.y as usize + pos.x as usize).unwrap_or_else(|| panic!("A cell at position {:?} should exist", pos))
     }
 
     pub fn get_cell_mut(&mut self, pos: Position) -> &mut Cell<C> {
-        self.cells.get_mut(self.width * pos.y as usize + pos.x as usize).expect(format!("A cell at position {:?} should exist", pos).as_str())
+        self.cells.get_mut(self.width * pos.y as usize + pos.x as usize).unwrap_or_else(|| panic!("A cell at position {:?} should exist", pos))
     }
 
     pub fn get_collapsed_indices(&self) -> impl Iterator<Item=(Position, usize)> + '_ {
