@@ -1,9 +1,9 @@
-use std::collections::VecDeque;
-use pad::p;
-use pad::position::Position;
+use crate::WfcError;
 use crate::cell::Cell;
 use crate::constraints::TileConstraints;
-use crate::WfcError;
+use pad::p;
+use pad::position::Position;
+use std::collections::{HashSet, VecDeque};
 // todo Maybe try using a set of not collapsed positions
 
 /// Contains the current state of the WFC with all the cells at their respective positions.
@@ -15,21 +15,12 @@ pub struct Board<const C: usize> {
     height: usize,
     /// The cells of the board, which tell what tiles are still possible
     cells: Vec<Cell<C>>,
-    /// Caches the amount of not already collapsed positions to quickly check
-    /// if the whole board is collapsed
-    not_collapsed_positions: usize,
-    // TODO there might be cases where this does not provide the position with the lowest entropy
-    //  For example, what if there are multiple cells with the lowest possible entropy, I collapse the
-    //  one which is cached here and in the propagation I set a position with a larger entropy as the min,
-    //  as this was the last one I saw. Maybe I need to cache more positions in a map or whatever.
-    //  Or I should just store the not collapes positions in a set and remove them when they are collapsed,
-    //  so the amount of positions to check shrinks every iteration and I check every possible one.
-    /// Caches the best (lowest entropy) next cell to collapse which might was found when collapsing
-    /// If no min next cell is known, the whole board has to be searched for the lowest entropy position
-    pub min_non_collapsed: Option<(Position, Cell<C>)>,
+    /// All [Position]s which are not collapsed yet. Used to more efficiently find the
+    /// next cell with the lowest entropy.
+    non_collapsed_positions: HashSet<Position>,
     /// The preallocated queue which will be used to hold positions to propagate next
     /// in the propagation step.
-    propagation_queue: VecDeque<Position>
+    propagation_queue: VecDeque<Position>,
 }
 
 impl<const C: usize> Board<C> {
@@ -37,42 +28,46 @@ impl<const C: usize> Board<C> {
         width: usize,
         height: usize,
         num_tiles: usize,
-        weights: [f32; C]
+        weights: [f32; C],
     ) -> Self {
         let cells = (0..(width * height))
             .map(|_| Cell::<C>::new(num_tiles, &weights))
             .collect();
+        let non_collapsed_positions = p!(0, 0).iter_to(p!(width - 1, height - 1)).collect();
 
         Board {
             width,
             height,
             cells,
-            not_collapsed_positions: width * height,
-            min_non_collapsed: None,
-            propagation_queue: VecDeque::new()
+            non_collapsed_positions,
+            propagation_queue: VecDeque::new(),
         }
     }
 
     /// tells if the full board is collapsed
     pub fn collapsed(&self) -> bool {
-        self.not_collapsed_positions == 0
+        self.non_collapsed_positions.is_empty()
     }
 
     /// Collapse the cell at the given position and set its tile index to the given one
-    pub fn collapse_position(&mut self, position: Position, index: u8) {
+    pub fn collapse_position(
+        &mut self,
+        position: Position,
+        index: u8,
+    ) {
         self.get_cell_mut(position).collapse(index);
-        self.not_collapsed_positions -= 1;
+        self.non_collapsed_positions.remove(&position);
     }
 
     /// Adapt all the cardinal neighbours of the given collapsed position
     /// This works recursive, so a collapsed neighbour will propagate the collapse to all
     /// its neighbours
-    pub (crate) fn propagate<T>(
+    pub(crate) fn propagate<T>(
         &mut self,
         collapsed_position: Position,
         tile_constraints: &TileConstraints<T>,
         weights: &[f32],
-        all_tiles: &[T]
+        all_tiles: &[T],
     ) -> Result<(), WfcError> {
         // init the propagation queue with the just collapsed position
         self.propagation_queue.push_back(collapsed_position);
@@ -96,7 +91,8 @@ impl<const C: usize> Board<C> {
 
                 // Collect the relevant data from the neighbour cell to
                 // create a cell update for it, which is its next state
-                let neighbours = pos.cardinal_neighbours()
+                let neighbours = pos
+                    .cardinal_neighbours()
                     .into_iter()
                     .filter(|p| self.pos_in_bounds(*p))
                     .map(|p| (self.get_cell(p).get_possible_indices(), p));
@@ -115,7 +111,7 @@ impl<const C: usize> Board<C> {
                 // no tile which fulfills all constraints. This is an error
                 // and is returned to the caller
                 if new_indices.is_empty() {
-                    return Err(WfcError::CellHasZeroEntropy(pos))
+                    return Err(WfcError::CellHasZeroEntropy(pos));
                 }
 
                 // If the indices changed (which can only mean: there are
@@ -125,7 +121,7 @@ impl<const C: usize> Board<C> {
                 if cell_indices != new_indices {
                     self.propagation_queue.push_back(pos);
                 } else {
-                    continue
+                    continue;
                 }
 
                 // update the cell with the values from the cell update
@@ -133,31 +129,10 @@ impl<const C: usize> Board<C> {
                 cell_mut.set_indices(new_indices.iter().copied());
                 cell_mut.set_weights(new_weights.iter().copied());
 
-                // As the last step in the propagation, update the
-                // min_non_collapsed, which is the best known position
-                // which can be collapsed next
-
                 let cell = self.get_cell(pos);
 
                 if cell.is_collapsed() {
-                    // if the best known position to collapse next is now collapsed, clear
-                    // it so a new position can be determined
-                    if let Some((p, _)) = self.min_non_collapsed && p == pos {
-                        self.min_non_collapsed = None
-                    }
-
-                    // todo why does this sometimes overflow?
-                    self.not_collapsed_positions -= 1;
-                } else {
-                    // update the cache with the best next cell
-                    self.min_non_collapsed = Some(match self.min_non_collapsed {
-                        // the current cell now has a lower entropy than the current min cell, overwrite
-                        Some((_, c)) if cell.entropy < c.entropy => (pos, *cell),
-                        // the current cell is not better, keep the same vale
-                        Some((p, c)) => (p, c),
-                        // no min value is set, use the current cell
-                        None => (pos, *cell)
-                    });
+                    self.non_collapsed_positions.remove(&pos);
                 }
             }
         }
@@ -165,31 +140,40 @@ impl<const C: usize> Board<C> {
         Ok(())
     }
 
-    fn pos_in_bounds(&self, pos: Position) -> bool {
-        pos.x >= 0
-            && pos.y >= 0
-            && pos.x < self.width as isize
-            && pos.y < self.height as isize
+    fn pos_in_bounds(
+        &self,
+        pos: Position,
+    ) -> bool {
+        pos.x >= 0 && pos.y >= 0 && pos.x < self.width as isize && pos.y < self.height as isize
     }
 
     pub fn get_min_entropy_position(&self) -> (Position, Cell<C>) {
-        p!(0, 0)
-            .iter_to(p!(self.width - 1, self.height - 1))
-            .map(|pos| (pos, *self.get_cell(pos)))
-            .filter(|(_, cell)| cell.entropy > 1)
+        self.non_collapsed_positions
+            .iter()
+            .map(|pos| (*pos, *self.get_cell(*pos)))
             .min_by(|(_, cell_a), (_, cell_b)| cell_a.entropy.cmp(&cell_b.entropy))
-            .expect("At least one not collapsed cell should exist")
+            .expect("At least one non collapsed cell should exist")
     }
 
-    pub fn get_cell(&self, pos: Position) -> &Cell<C> {
-        self.cells.get(self.width * pos.y as usize + pos.x as usize).unwrap_or_else(|| panic!("A cell at position {:?} should exist", pos))
+    pub fn get_cell(
+        &self,
+        pos: Position,
+    ) -> &Cell<C> {
+        self.cells
+            .get(self.width * pos.y as usize + pos.x as usize)
+            .unwrap_or_else(|| panic!("A cell at position {:?} should exist", pos))
     }
 
-    pub fn get_cell_mut(&mut self, pos: Position) -> &mut Cell<C> {
-        self.cells.get_mut(self.width * pos.y as usize + pos.x as usize).unwrap_or_else(|| panic!("A cell at position {:?} should exist", pos))
+    pub fn get_cell_mut(
+        &mut self,
+        pos: Position,
+    ) -> &mut Cell<C> {
+        self.cells
+            .get_mut(self.width * pos.y as usize + pos.x as usize)
+            .unwrap_or_else(|| panic!("A cell at position {:?} should exist", pos))
     }
 
-    pub fn get_collapsed_indices(&self) -> impl Iterator<Item=(Position, usize)> + '_ {
+    pub fn get_collapsed_indices(&self) -> impl Iterator<Item = (Position, usize)> + '_ {
         p!(0, 0)
             .iter_to(p!(self.width - 1, self.height - 1))
             .map(|pos| (pos, self.get_cell(pos).get_collapsed_index() as usize))

@@ -168,7 +168,7 @@ impl<T> Constraint<T> for PossibleNeighbours {
     ) -> Option<f32> {
         // for every neighbour, one possible tile must match with the current tile
         let valid = neighbours
-            .into_iter()
+            .iter()
             .all(|(nts, _)| nts
                 .iter()
                 .any(|nt| self.allowed_neighbours.contains(&(tile, *nt)) || self.allowed_neighbours.contains(&(*nt, tile)))
