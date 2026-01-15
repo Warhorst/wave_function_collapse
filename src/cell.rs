@@ -1,4 +1,4 @@
-// todo maybe provide a dynamic variant which works with vectors internally
+// TODO maybe provide a dynamic variant which works with vectors internally (Or a fixed array and the amount of tiles, an I just use slices)
 /// Holds the possible tile indices which are possible by a specific position, known by the board.
 /// The const generic C represents the maximum amount of tiles possible and therefore the capacity of
 /// the cell.
