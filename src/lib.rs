@@ -1,15 +1,19 @@
+use crate::{
+    board::Board,
+    constraints::{Constraint, TileConstraints},
+    random::Random,
+};
+use pad::position::Position;
+use std::{
+    error::Error,
+    fmt::{Display, Formatter},
+    hash::Hash,
+};
+
 mod board;
 mod cell;
 pub mod constraints;
 mod random;
-
-use crate::board::Board;
-use crate::constraints::{Constraint, TileConstraints};
-use crate::random::Random;
-use pad::position::Position;
-use std::error::Error;
-use std::fmt::{Display, Formatter};
-use std::hash::Hash;
 
 // todo
 //  - Edge Colors, so no neighbour constraints have to be set manually
