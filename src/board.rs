@@ -15,6 +15,7 @@ pub struct Board<const C: usize> {
     height: usize,
     /// The cells of the board, which tell what tiles are still possible
     cells: Vec<Cell<C>>,
+    pub (crate) weights: Vec<f32>,
     /// All [Position]s which are not collapsed yet. Used to more efficiently find the
     /// next cell with the lowest entropy.
     non_collapsed_positions: HashSet<Position>,
@@ -28,17 +29,20 @@ impl<const C: usize> Board<C> {
         width: usize,
         height: usize,
         num_tiles: usize,
-        weights: [f32; C],
+        weights: &[f32],
     ) -> Self {
         let cells = (0..(width * height))
-            .map(|_| Cell::<C>::new(num_tiles, &weights))
+            .map(|_| Cell::<C>::new(num_tiles))
             .collect();
         let non_collapsed_positions = p!(0, 0).iter_to(p!(width - 1, height - 1)).collect();
+
+        let weights = weights.to_vec();
 
         Board {
             width,
             height,
             cells,
+            weights,
             non_collapsed_positions,
             propagation_queue: VecDeque::new(),
         }
@@ -105,7 +109,6 @@ impl<const C: usize> Board<C> {
                     all_tiles,
                 );
                 let new_indices = cell_update.new_indices();
-                let new_weights = cell_update.new_weights();
 
                 // If the new indices are empty, it means there is
                 // no tile which fulfills all constraints. This is an error
@@ -127,7 +130,6 @@ impl<const C: usize> Board<C> {
                 // update the cell with the values from the cell update
                 let cell_mut = self.get_cell_mut(pos);
                 cell_mut.set_indices(new_indices.iter().copied());
-                cell_mut.set_weights(new_weights.iter().copied());
 
                 let cell = self.get_cell(pos);
 

@@ -2,6 +2,9 @@ use crate::Tile::*;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use wave_function_collapse::{WfcBuilder, constraints::PossibleNeighbours};
 
+// TODO add a benchmark without constraints for a worst case scenario
+// TODO adda benchmark with a very collapsable set of tiles, as a best case scenario
+
 #[derive(Copy, Clone, Eq, PartialEq)]
 enum Tile {
     Water,

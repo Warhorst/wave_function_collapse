@@ -26,6 +26,7 @@ pub struct WfcBuilder<const C: usize, T: Clone> {
     height: usize,
     tiles: Vec<T>,
     tile_constraints: TileConstraints<T>,
+    // TODO why does the seed no longer work?
     random: Random,
     weights: [f32; C],
 }
@@ -89,7 +90,7 @@ where
             });
         }
 
-        let board = Board::<C>::new(self.width, self.height, self.tiles.len(), self.weights);
+        let board = Board::<C>::new(self.width, self.height, self.tiles.len(), &self.weights);
 
         Ok(Wfc {
             board,
@@ -120,8 +121,11 @@ where
             let (pos, cell) = self.board.get_min_entropy_position();
 
             let possible_indices = cell.get_possible_indices();
-            let weights = cell.get_tile_weights();
-            let index = self.choose_next_index(possible_indices, weights);
+            let weights = cell
+                .get_possible_indices()
+                .iter()
+                .map(|i| self.board.weights[*i as usize]);
+            let index = Self::choose_next_index(&mut self.random, possible_indices, weights);
             self.board.collapse_position(pos, index);
             self.board
                 .propagate(pos, &self.tile_constraints, &self.weights, &self.tiles)?;
@@ -135,11 +139,11 @@ where
     }
 
     fn choose_next_index(
-        &mut self,
+        random: &mut Random,
         possible_indices: &[u8],
-        tile_weights: &[f32],
+        tile_weights: impl IntoIterator<Item = f32>,
     ) -> u8 {
-        self.random.choose_weighted(tile_weights, possible_indices)
+        random.choose_weighted(tile_weights, possible_indices)
     }
 }
 

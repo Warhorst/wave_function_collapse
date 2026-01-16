@@ -78,7 +78,6 @@ impl<T> TileConstraints<T> {
 
         CellUpdate {
             new_indices,
-            new_weights,
             new_entropy
         }
     }
@@ -87,17 +86,12 @@ impl<T> TileConstraints<T> {
 /// Contains the next values a [crate::cell::Cell] will have.
 pub (crate) struct CellUpdate<const C: usize> {
     new_indices: [u8; C],
-    new_weights: [f32; C],
     new_entropy: u8
 }
 
 impl<const C: usize> CellUpdate<C> {
     pub fn new_indices(&self) -> &[u8] {
         &self.new_indices[0..self.new_entropy as usize]
-    }
-
-    pub fn new_weights(&self) -> &[f32] {
-        &self.new_weights[0..self.new_entropy as usize]
     }
 }
 

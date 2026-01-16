@@ -1,6 +1,8 @@
-use rand::distributions::WeightedIndex;
-use rand::prelude::{Distribution, StdRng};
-use rand::SeedableRng;
+use rand::{
+    SeedableRng,
+    distributions::WeightedIndex,
+    prelude::{Distribution, StdRng},
+};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 /// Provides random numbers to the WFC.
@@ -11,7 +13,7 @@ pub struct Random {
 impl Random {
     pub fn new() -> Self {
         Random {
-            rng: StdRng::from_entropy()
+            rng: StdRng::from_entropy(),
         }
     }
 
@@ -21,13 +23,13 @@ impl Random {
         let seed = hasher.finish();
 
         Random {
-            rng: StdRng::seed_from_u64(seed)
+            rng: StdRng::seed_from_u64(seed),
         }
     }
 
     pub fn choose_weighted<T: Copy>(
         &mut self,
-        weights: &[f32],
+        weights: impl IntoIterator<Item = f32>,
         choices: &[T],
     ) -> T {
         let dist = WeightedIndex::new(weights).unwrap();
