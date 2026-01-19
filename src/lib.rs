@@ -1,7 +1,5 @@
 use crate::{
-    board::Board,
-    constraints::{Constraint, TileConstraints},
-    random::Random,
+    board::Board, cell::PossibleIndices, constraints::{Constraint, TileConstraints}, random::Random
 };
 use pad::position::Position;
 use std::{
@@ -14,6 +12,9 @@ mod board;
 mod cell;
 pub mod constraints;
 mod random;
+
+/// The maximum amout of tiles possible in the WFC
+pub(crate) const MAX_NUM_TILES: usize = 128;
 
 // todo
 //  - Edge Colors, so no neighbour constraints have to be set manually
@@ -121,10 +122,9 @@ where
             let (pos, cell) = self.board.get_min_entropy_position();
 
             let possible_indices = cell.get_possible_indices();
-            let weights = cell
-                .get_possible_indices()
+            let weights = possible_indices
                 .iter()
-                .map(|i| self.board.weights[*i as usize]);
+                .map(|i| self.board.weights[i as usize]);
             let index = Self::choose_next_index(&mut self.random, possible_indices, weights);
             self.board.collapse_position(pos, index);
             self.board
@@ -140,7 +140,7 @@ where
 
     fn choose_next_index(
         random: &mut Random,
-        possible_indices: &[u8],
+        possible_indices: PossibleIndices,
         tile_weights: impl IntoIterator<Item = f32>,
     ) -> u8 {
         random.choose_weighted(tile_weights, possible_indices)

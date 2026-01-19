@@ -102,13 +102,12 @@ impl<const C: usize> Board<C> {
                     .map(|p| (self.get_cell(p).get_possible_indices(), p));
                 let cell = self.get_cell(pos);
                 let cell_indices = cell.get_possible_indices();
-                let cell_update = tile_constraints.update_cell::<C>(
+                let new_indices = tile_constraints.update_cell::<C>(
                     (cell_indices, pos),
                     neighbours,
                     weights,
                     all_tiles,
                 );
-                let new_indices = cell_update.new_indices();
 
                 // If the new indices are empty, it means there is
                 // no tile which fulfills all constraints. This is an error
@@ -129,7 +128,7 @@ impl<const C: usize> Board<C> {
 
                 // update the cell with the values from the cell update
                 let cell_mut = self.get_cell_mut(pos);
-                cell_mut.set_indices(new_indices.iter().copied());
+                cell_mut.set_indices(new_indices.iter());
 
                 let cell = self.get_cell(pos);
 

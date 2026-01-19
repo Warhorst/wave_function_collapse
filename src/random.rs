@@ -5,6 +5,8 @@ use rand::{
 };
 use std::hash::{DefaultHasher, Hash, Hasher};
 
+use crate::cell::PossibleIndices;
+
 /// Provides random numbers to the WFC.
 pub struct Random {
     rng: StdRng,
@@ -27,12 +29,12 @@ impl Random {
         }
     }
 
-    pub fn choose_weighted<T: Copy>(
+    pub fn choose_weighted(
         &mut self,
         weights: impl IntoIterator<Item = f32>,
-        choices: &[T],
-    ) -> T {
+        choices: PossibleIndices,
+    ) -> u8 {
         let dist = WeightedIndex::new(weights).unwrap();
-        choices[dist.sample(&mut self.rng)]
+        choices.get(dist.sample(&mut self.rng))
     }
 }
