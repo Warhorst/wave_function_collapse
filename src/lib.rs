@@ -28,7 +28,6 @@ pub struct WfcBuilder<T: Clone, C: Cell> {
     height: usize,
     tiles: Vec<T>,
     tile_constraints: TileConstraints<T>,
-    // TODO why does the seed no longer work? A: Because I use a HashSet internally to choose the next position
     random: Random,
     weights: Vec<f32>,
     _cell_type: PhantomData<C>,

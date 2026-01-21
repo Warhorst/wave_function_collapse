@@ -2,7 +2,7 @@ use crate::{cell::Cell, WfcError};
 use crate::constraints::TileConstraints;
 use pad::p;
 use pad::position::Position;
-use std::collections::{HashSet, VecDeque};
+use std::collections::{BTreeSet, VecDeque};
 // todo Maybe try using a set of not collapsed positions
 
 /// Contains the current state of the WFC with all the cells at their respective positions.
@@ -17,7 +17,7 @@ pub struct Board<C: Cell> {
     pub (crate) weights: Vec<f32>,
     /// All [Position]s which are not collapsed yet. Used to more efficiently find the
     /// next cell with the lowest entropy.
-    non_collapsed_positions: HashSet<Position>,
+    non_collapsed_positions: BTreeSet<Position>,
     /// The preallocated queue which will be used to hold positions to propagate next
     /// in the propagation step.
     propagation_queue: VecDeque<Position>,
