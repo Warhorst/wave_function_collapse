@@ -1,5 +1,4 @@
-use crate::WfcError;
-use crate::cell::Cell;
+use crate::{cell::Cell, WfcError};
 use crate::constraints::TileConstraints;
 use pad::p;
 use pad::position::Position;
@@ -8,13 +7,14 @@ use std::collections::{HashSet, VecDeque};
 
 /// Contains the current state of the WFC with all the cells at their respective positions.
 /// The WFC is done if all positions on the board are collapsed.
-pub struct Board<const C: usize> {
-    /// Width of the board
+pub struct Board<C: Cell> {
+    /// Width of the [Board]
     width: usize,
-    /// Height of the board
+    /// Height of the [Board]
     height: usize,
-    /// The cells of the board, which tell what tiles are still possible
-    cells: Vec<Cell<C>>,
+    /// The [Cell]s of the [Board], which tell what tiles are still possible
+    cells: Vec<C>,
+    pub (crate) weights: Vec<f32>,
     /// All [Position]s which are not collapsed yet. Used to more efficiently find the
     /// next cell with the lowest entropy.
     non_collapsed_positions: HashSet<Position>,
@@ -23,22 +23,25 @@ pub struct Board<const C: usize> {
     propagation_queue: VecDeque<Position>,
 }
 
-impl<const C: usize> Board<C> {
+impl<C: Cell> Board<C> {
     pub fn new(
         width: usize,
         height: usize,
         num_tiles: usize,
-        weights: [f32; C],
+        weights: &[f32],
     ) -> Self {
         let cells = (0..(width * height))
-            .map(|_| Cell::<C>::new(num_tiles, &weights))
+            .map(|_| C::new(num_tiles))
             .collect();
         let non_collapsed_positions = p!(0, 0).iter_to(p!(width - 1, height - 1)).collect();
+
+        let weights = weights.to_vec();
 
         Board {
             width,
             height,
             cells,
+            weights,
             non_collapsed_positions,
             propagation_queue: VecDeque::new(),
         }
@@ -65,8 +68,7 @@ impl<const C: usize> Board<C> {
     pub(crate) fn propagate<T>(
         &mut self,
         collapsed_position: Position,
-        tile_constraints: &TileConstraints<T>,
-        weights: &[f32],
+        tile_constraints: &mut TileConstraints<T>,
         all_tiles: &[T],
     ) -> Result<(), WfcError> {
         // init the propagation queue with the just collapsed position
@@ -98,14 +100,11 @@ impl<const C: usize> Board<C> {
                     .map(|p| (self.get_cell(p).get_possible_indices(), p));
                 let cell = self.get_cell(pos);
                 let cell_indices = cell.get_possible_indices();
-                let cell_update = tile_constraints.update_cell::<C>(
+                let new_indices = tile_constraints.update_cell(
                     (cell_indices, pos),
                     neighbours,
-                    weights,
                     all_tiles,
                 );
-                let new_indices = cell_update.new_indices();
-                let new_weights = cell_update.new_weights();
 
                 // If the new indices are empty, it means there is
                 // no tile which fulfills all constraints. This is an error
@@ -118,7 +117,7 @@ impl<const C: usize> Board<C> {
                 // now fewer tiles), the cell has now a lower entropy. This
                 // must be propagated to its neighbours, so it is added to the
                 // propagation queue
-                if cell_indices != new_indices {
+                if cell_indices.entropy() as usize != new_indices.len() {
                     self.propagation_queue.push_back(pos);
                 } else {
                     continue;
@@ -127,7 +126,6 @@ impl<const C: usize> Board<C> {
                 // update the cell with the values from the cell update
                 let cell_mut = self.get_cell_mut(pos);
                 cell_mut.set_indices(new_indices.iter().copied());
-                cell_mut.set_weights(new_weights.iter().copied());
 
                 let cell = self.get_cell(pos);
 
@@ -147,18 +145,18 @@ impl<const C: usize> Board<C> {
         pos.x >= 0 && pos.y >= 0 && pos.x < self.width as isize && pos.y < self.height as isize
     }
 
-    pub fn get_min_entropy_position(&self) -> (Position, Cell<C>) {
+    pub fn get_min_entropy_position(&self) -> (Position, &C) {
         self.non_collapsed_positions
             .iter()
-            .map(|pos| (*pos, *self.get_cell(*pos)))
-            .min_by(|(_, cell_a), (_, cell_b)| cell_a.entropy.cmp(&cell_b.entropy))
+            .map(|pos| (*pos, self.get_cell(*pos)))
+            .min_by(|(_, cell_a), (_, cell_b)| cell_a.entropy().cmp(&cell_b.entropy()))
             .expect("At least one non collapsed cell should exist")
     }
 
     pub fn get_cell(
         &self,
         pos: Position,
-    ) -> &Cell<C> {
+    ) -> &C {
         self.cells
             .get(self.width * pos.y as usize + pos.x as usize)
             .unwrap_or_else(|| panic!("A cell at position {:?} should exist", pos))
@@ -167,7 +165,7 @@ impl<const C: usize> Board<C> {
     pub fn get_cell_mut(
         &mut self,
         pos: Position,
-    ) -> &mut Cell<C> {
+    ) -> &mut C {
         self.cells
             .get_mut(self.width * pos.y as usize + pos.x as usize)
             .unwrap_or_else(|| panic!("A cell at position {:?} should exist", pos))

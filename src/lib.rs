@@ -1,5 +1,6 @@
 use crate::{
     board::Board,
+    cell::{Cell, PossibleIndices},
     constraints::{Constraint, TileConstraints},
     random::Random,
 };
@@ -8,10 +9,11 @@ use std::{
     error::Error,
     fmt::{Display, Formatter},
     hash::Hash,
+    marker::PhantomData,
 };
 
 mod board;
-mod cell;
+pub mod cell;
 pub mod constraints;
 mod random;
 
@@ -21,16 +23,18 @@ mod random;
 //  - MAYBE Providing an iterator, so I can watch the wfc work
 
 /// The builder for a [Wfc].
-pub struct WfcBuilder<const C: usize, T: Clone> {
+pub struct WfcBuilder<T: Clone, C: Cell> {
     width: usize,
     height: usize,
     tiles: Vec<T>,
     tile_constraints: TileConstraints<T>,
+    // TODO why does the seed no longer work? A: Because I use a HashSet internally to choose the next position
     random: Random,
-    weights: [f32; C],
+    weights: Vec<f32>,
+    _cell_type: PhantomData<C>,
 }
 
-impl<const C: usize, T> WfcBuilder<C, T>
+impl<T, C: Cell> WfcBuilder<T, C>
 where
     T: Clone,
 {
@@ -42,10 +46,11 @@ where
         WfcBuilder {
             width,
             height,
+            weights: vec![1.0; tiles.len()],
             tiles,
             tile_constraints: TileConstraints::default(),
             random: Random::new(),
-            weights: [1.0; C],
+            _cell_type: PhantomData,
         }
     }
 
@@ -62,13 +67,12 @@ where
         mut self,
         tile_weights: impl IntoIterator<Item = f32>,
     ) -> Self {
-        let mut weights = [0.0; C];
+        self.weights.clear();
 
-        for (i, weight) in tile_weights.into_iter().enumerate() {
-            weights[i] = weight;
+        for weight in tile_weights.into_iter() {
+            self.weights.push(weight);
         }
 
-        self.weights = weights;
         self
     }
 
@@ -81,36 +85,27 @@ where
     }
 
     /// Validate the input and create a [Wfc].
-    pub fn build(self) -> Result<Wfc<C, T>, WfcError> {
-        if self.tiles.len() > C {
-            return Err(WfcError::TooManyTiles {
-                max: C,
-                was: self.tiles.len(),
-            });
-        }
-
-        let board = Board::<C>::new(self.width, self.height, self.tiles.len(), self.weights);
+    pub fn build(self) -> Result<Wfc<T, C>, WfcError> {
+        let board = Board::<C>::new(self.width, self.height, self.tiles.len(), &self.weights);
 
         Ok(Wfc {
             board,
             tiles: self.tiles,
             tile_constraints: self.tile_constraints,
             random: self.random,
-            weights: self.weights,
         })
     }
 }
 
 /// The struct which performs the wave function collapse.
-pub struct Wfc<const C: usize, T: Clone> {
+pub struct Wfc<T: Clone, C: Cell> {
     board: Board<C>,
     tiles: Vec<T>,
     tile_constraints: TileConstraints<T>,
     random: Random,
-    weights: [f32; C],
 }
 
-impl<const C: usize, T> Wfc<C, T>
+impl<T, C: Cell> Wfc<T, C>
 where
     T: Clone,
 {
@@ -120,11 +115,13 @@ where
             let (pos, cell) = self.board.get_min_entropy_position();
 
             let possible_indices = cell.get_possible_indices();
-            let weights = cell.get_tile_weights();
-            let index = self.choose_next_index(possible_indices, weights);
+            let weights = possible_indices
+                .iter()
+                .map(|i| self.board.weights[i as usize]);
+            let index = Self::choose_next_index(&mut self.random, possible_indices, weights);
             self.board.collapse_position(pos, index);
             self.board
-                .propagate(pos, &self.tile_constraints, &self.weights, &self.tiles)?;
+                .propagate(pos, &mut self.tile_constraints, &self.tiles)?;
         }
 
         Ok(self
@@ -135,15 +132,15 @@ where
     }
 
     fn choose_next_index(
-        &mut self,
-        possible_indices: &[u8],
-        tile_weights: &[f32],
+        random: &mut Random,
+        possible_indices: PossibleIndices,
+        tile_weights: impl IntoIterator<Item = f32>,
     ) -> u8 {
-        self.random.choose_weighted(tile_weights, possible_indices)
+        random.choose_weighted(tile_weights, possible_indices)
     }
 }
 
-impl<const C: usize, T> Wfc<C, T>
+impl<T, C: Cell> Wfc<T, C>
 where
     T: Clone + PartialEq,
 {
@@ -172,7 +169,7 @@ where
 
         for (pos, _) in tiles {
             self.board
-                .propagate(pos, &self.tile_constraints, &self.weights, &self.tiles)?
+                .propagate(pos, &mut self.tile_constraints, &self.tiles)?
         }
 
         Ok(())
