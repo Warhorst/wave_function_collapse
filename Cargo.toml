@@ -14,3 +14,6 @@ criterion = "0.5.1"
 [[bench]]
 name = "wfc_benchmark"
 harness = false
+
+[workspace]
+members = ["playground"]
