@@ -2,8 +2,11 @@ use bitarray::BitArray;
 
 /// A [Cell] contains the possible tiles (or rather their indices) at a specific [pad::position::Position] on the [crate::board::Board].
 pub trait Cell {
-    /// Create a new [Cell] from the amount of tiles the wfc will use.
-    fn new(num_tiles: usize) -> Self;
+    /// Create a new [Cell] from the amount of tiles the wfc will use the the index of the bucket queue bucket the cell is currently in.
+    fn new(
+        num_tiles: usize,
+        bucket_index: usize,
+    ) -> Self;
 
     /// Return the entropy of this [Cell], which is the amount of possible tiles.
     fn entropy(&self) -> u8;
@@ -29,6 +32,15 @@ pub trait Cell {
 
     /// Returs true if this [Cell] is collapsed, or else false.
     fn is_collapsed(&self) -> bool;
+
+    /// Returns the index in the bucket of the bucket queue the cell is currently in.
+    fn get_bucket_index(&self) -> usize;
+
+    /// Updates the bucket index in this cell.
+    fn set_bucket_index(
+        &mut self,
+        bucket_index: usize,
+    );
 }
 
 /// Holds the possible tile indices which are possible by a specific position, known by the board.
@@ -42,10 +54,14 @@ pub struct ConstCell<const C: usize> {
     pub entropy: u8,
     /// the indices of all tiles which are currently possible in this cell; only the entries until the self.entropy index are used
     tile_indices: [u8; C],
+    bucket_index: usize,
 }
 
 impl<const C: usize> Cell for ConstCell<C> {
-    fn new(num_tiles: usize) -> Self {
+    fn new(
+        num_tiles: usize,
+        bucket_index: usize,
+    ) -> Self {
         let mut tile_indices = [0; C];
 
         for (i, index) in tile_indices.iter_mut().enumerate() {
@@ -55,6 +71,7 @@ impl<const C: usize> Cell for ConstCell<C> {
         ConstCell {
             entropy: num_tiles as u8,
             tile_indices,
+            bucket_index,
         }
     }
 
@@ -101,6 +118,17 @@ impl<const C: usize> Cell for ConstCell<C> {
     fn is_collapsed(&self) -> bool {
         self.entropy == 1
     }
+
+    fn get_bucket_index(&self) -> usize {
+        self.bucket_index
+    }
+
+    fn set_bucket_index(
+        &mut self,
+        bucket_index: usize,
+    ) {
+        self.bucket_index = bucket_index
+    }
 }
 
 /// A [Cell] which uses a [BitArray] internally to store its possible indices. As [u128]
@@ -109,10 +137,14 @@ impl<const C: usize> Cell for ConstCell<C> {
 pub struct BitCell {
     pub entropy: u8,
     tile_indices: BitArray<u128>,
+    bucket_index: usize,
 }
 
 impl Cell for BitCell {
-    fn new(num_tiles: usize) -> Self {
+    fn new(
+        num_tiles: usize,
+        bucket_index: usize,
+    ) -> Self {
         let mut tile_indices = BitArray::new(0);
 
         for i in 0..num_tiles {
@@ -122,6 +154,7 @@ impl Cell for BitCell {
         BitCell {
             entropy: num_tiles as u8,
             tile_indices,
+            bucket_index,
         }
     }
 
@@ -171,23 +204,41 @@ impl Cell for BitCell {
     fn is_collapsed(&self) -> bool {
         self.entropy == 1
     }
+
+    fn get_bucket_index(&self) -> usize {
+        self.bucket_index
+    }
+
+    fn set_bucket_index(
+        &mut self,
+        bucket_index: usize,
+    ) {
+        self.bucket_index = bucket_index
+    }
 }
 
 /// A [Cell] which supports an arbitrary amount of tiles. This is the most flexible implementation
 /// of [Cell]
 pub struct DynCell {
-    indices: Vec<u8>
+    indices: Vec<u8>,
+    bucket_index: usize,
 }
 
 impl Cell for DynCell {
-    fn new(num_tiles: usize) -> Self {
+    fn new(
+        num_tiles: usize,
+        bucket_index: usize,
+    ) -> Self {
         let mut indices = Vec::with_capacity(num_tiles);
 
         for i in 0..num_tiles {
             indices.push(i as u8);
         }
 
-        DynCell { indices }
+        DynCell {
+            indices,
+            bucket_index,
+        }
     }
 
     fn entropy(&self) -> u8 {
@@ -211,7 +262,9 @@ impl Cell for DynCell {
         indices: impl IntoIterator<Item = u8>,
     ) {
         self.indices.clear();
-        indices.into_iter().for_each(|index| self.indices.push(index));
+        indices
+            .into_iter()
+            .for_each(|index| self.indices.push(index));
     }
 
     fn get_collapsed_index(&self) -> u8 {
@@ -220,6 +273,17 @@ impl Cell for DynCell {
 
     fn is_collapsed(&self) -> bool {
         self.entropy() == 1
+    }
+
+    fn get_bucket_index(&self) -> usize {
+        self.bucket_index
+    }
+
+    fn set_bucket_index(
+        &mut self,
+        bucket_index: usize,
+    ) {
+        self.bucket_index = bucket_index
     }
 }
 

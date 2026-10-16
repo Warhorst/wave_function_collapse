@@ -9,7 +9,6 @@ use wave_function_collapse::{
     constraints::PossibleNeighbours,
 };
 
-// TODO add a benchmark without constraints for a worst case scenario
 // TODO adda benchmark with a very collapsable set of tiles, as a best case scenario
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -86,11 +85,30 @@ pub fn simple(c: &mut Criterion) {
     }
 }
 
-pub fn multi_dimension(c: &mut Criterion) {
+pub fn no_constraints(c: &mut Criterion) {
+    let dimensions = [50, 75, 100, 125, 250, 500];
+
+    for dim in dimensions {
+        c.bench_with_input(BenchmarkId::new("worst_case", dim), &dim, |b, dim| {
+            b.iter(|| {
+                let tiles = vec![Water, Sand, Forest];
+
+                WfcBuilder::<Tile, ConstCell<3>>::new(*dim, *dim, tiles)
+                    .with_seed(42)
+                    .build()
+                    .unwrap()
+                    .collapse()
+                    .unwrap();
+            })
+        });
+    }
+}
+
+pub fn possible_neighbours(c: &mut Criterion) {
     let dimensions = [50, 75, 100, 125];
 
     for dim in dimensions {
-        c.bench_with_input(BenchmarkId::new("multi_dimension", dim), &dim, |b, dim| {
+        c.bench_with_input(BenchmarkId::new("possible_neighbours", dim), &dim, |b, dim| {
             b.iter(|| {
                 let tiles = vec![Water, Sand, Forest];
                 let possible_neighbours = PossibleNeighbours::new(
@@ -117,5 +135,5 @@ pub fn multi_dimension(c: &mut Criterion) {
     }
 }
 
-criterion_group!(benches, simple, multi_dimension);
+criterion_group!(benches, simple, no_constraints, possible_neighbours);
 criterion_main!(benches);

@@ -1,8 +1,8 @@
-use crate::{cell::Cell, WfcError};
 use crate::constraints::TileConstraints;
+use crate::{WfcError, cell::Cell};
 use pad::p;
 use pad::position::Position;
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::VecDeque;
 // todo Maybe try using a set of not collapsed positions
 
 /// Contains the current state of the WFC with all the cells at their respective positions.
@@ -14,10 +14,8 @@ pub struct Board<C: Cell> {
     height: usize,
     /// The [Cell]s of the [Board], which tell what tiles are still possible
     cells: Vec<C>,
-    pub (crate) weights: Vec<f32>,
-    /// All [Position]s which are not collapsed yet. Used to more efficiently find the
-    /// next cell with the lowest entropy.
-    non_collapsed_positions: BTreeSet<Position>,
+    pub(crate) weights: Vec<f32>,
+    bucket_queue: BucketQueue,
     /// The preallocated queue which will be used to hold positions to propagate next
     /// in the propagation step.
     propagation_queue: VecDeque<Position>,
@@ -31,9 +29,10 @@ impl<C: Cell> Board<C> {
         weights: &[f32],
     ) -> Self {
         let cells = (0..(width * height))
-            .map(|_| C::new(num_tiles))
+            .map(|i| C::new(num_tiles, i))
             .collect();
-        let non_collapsed_positions = p!(0, 0).iter_to(p!(width - 1, height - 1)).collect();
+        let bucket_queue =
+            BucketQueue::initialize(p!(0, 0).iter_to(p!(width - 1, height - 1)), num_tiles);
 
         let weights = weights.to_vec();
 
@@ -42,14 +41,14 @@ impl<C: Cell> Board<C> {
             height,
             cells,
             weights,
-            non_collapsed_positions,
+            bucket_queue,
             propagation_queue: VecDeque::new(),
         }
     }
 
     /// tells if the full board is collapsed
     pub fn collapsed(&self) -> bool {
-        self.non_collapsed_positions.is_empty()
+        self.bucket_queue.is_empty()
     }
 
     /// Collapse the cell at the given position and set its tile index to the given one
@@ -58,8 +57,18 @@ impl<C: Cell> Board<C> {
         position: Position,
         index: u8,
     ) {
-        self.get_cell_mut(position).collapse(index);
-        self.non_collapsed_positions.remove(&position);
+        let cell = self.get_cell_mut(position);
+        let entropy = cell.entropy();
+        cell.collapse(index);
+
+        let cell = self.get_cell(position);
+        if let Some((pos, index)) = self
+            .bucket_queue
+            .remove_cell(entropy as usize, cell.get_bucket_index())
+        {
+            let cell = self.get_cell_mut(pos);
+            cell.set_bucket_index(index);
+        }
     }
 
     /// Adapt all the cardinal neighbours of the given collapsed position
@@ -99,12 +108,10 @@ impl<C: Cell> Board<C> {
                     .filter(|p| self.pos_in_bounds(*p))
                     .map(|p| (self.get_cell(p).get_possible_indices(), p));
                 let cell = self.get_cell(pos);
+                let current_entropy = cell.entropy();
                 let cell_indices = cell.get_possible_indices();
-                let new_indices = tile_constraints.update_cell(
-                    (cell_indices, pos),
-                    neighbours,
-                    all_tiles,
-                );
+                let new_indices =
+                    tile_constraints.update_cell((cell_indices, pos), neighbours, all_tiles);
 
                 // If the new indices are empty, it means there is
                 // no tile which fulfills all constraints. This is an error
@@ -130,7 +137,29 @@ impl<C: Cell> Board<C> {
                 let cell = self.get_cell(pos);
 
                 if cell.is_collapsed() {
-                    self.non_collapsed_positions.remove(&pos);
+                    if let Some((pos, index)) = self
+                        .bucket_queue
+                        .remove_cell(current_entropy as usize, cell.get_bucket_index())
+                    {
+                        let cell = self.get_cell_mut(pos);
+                        cell.set_bucket_index(index);
+                    }
+                } else {
+                    // TODO move cell to new bucket based on entropy
+                    let (new_bucket_index, moved_cell_opt) = self.bucket_queue.move_cell(
+                        current_entropy as usize,
+                        cell.get_bucket_index(),
+                        cell.entropy() as usize,
+                        pos,
+                    );
+
+                    let cell = self.get_cell_mut(pos);
+                    cell.set_bucket_index(new_bucket_index);
+
+                    if let Some((pos, index)) = moved_cell_opt {
+                        let cell = self.get_cell_mut(pos);
+                        cell.set_bucket_index(index);
+                    }
                 }
             }
         }
@@ -146,11 +175,9 @@ impl<C: Cell> Board<C> {
     }
 
     pub fn get_min_entropy_position(&self) -> (Position, &C) {
-        self.non_collapsed_positions
-            .iter()
-            .map(|pos| (*pos, self.get_cell(*pos)))
-            .min_by(|(_, cell_a), (_, cell_b)| cell_a.entropy().cmp(&cell_b.entropy()))
-            .expect("At least one non collapsed cell should exist")
+        let min_pos = *self.bucket_queue.next_min();
+        let cell = self.get_cell(min_pos);
+        (min_pos, cell)
     }
 
     pub fn get_cell(
@@ -175,5 +202,114 @@ impl<C: Cell> Board<C> {
         p!(0, 0)
             .iter_to(p!(self.width - 1, self.height - 1))
             .map(|pos| (pos, self.get_cell(pos).get_collapsed_index() as usize))
+    }
+}
+
+struct BucketQueue {
+    min_entropy: usize,
+    buckets: Vec<Vec<Position>>,
+    num_cells: usize,
+}
+
+impl BucketQueue {
+    fn initialize(
+        positions: impl IntoIterator<Item = Position>,
+        max_entroypy: usize,
+    ) -> Self {
+        let mut buckets = vec![];
+        let positions: Vec<Position> = positions.into_iter().collect();
+        let num_cells = positions.len();
+
+        for _ in 0..max_entroypy - 1 {
+            // It is expected that less space is required for smaller entropies
+            buckets.push(Vec::with_capacity(positions.len() / 10));
+        }
+
+        buckets.push(positions);
+
+        BucketQueue {
+            min_entropy: max_entroypy,
+            buckets,
+            num_cells,
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.num_cells == 0
+    }
+
+    fn next_min(&self) -> &Position {
+        self.buckets[self.min_entropy - 1]
+            .first()
+            .expect("The bucket cannot be empty")
+    }
+
+    /// Move a cell at old_entropy and bucket_index to the new entropy.
+    ///
+    /// This returns the new bucket index of the cell. This also might return
+    /// the position and new bucket index of another cell that was also moved in the process
+    fn move_cell(
+        &mut self,
+        old_entropy: usize,
+        bucket_index: usize,
+        new_entropy: usize,
+        position: Position,
+    ) -> (usize, Option<(Position, usize)>) {
+        let bucket = &mut self.buckets[old_entropy - 1];
+
+        let last_index = bucket.len() - 1;
+        // If the cell was the last entry in the bucket, nothing was moved due to the swap remove
+        let moved_index = (bucket_index != last_index).then_some(bucket_index);
+
+        bucket.swap_remove(bucket_index);
+
+        let moved_opt = moved_index.map(|i| (self.buckets[old_entropy - 1][i], i));
+        self.buckets[new_entropy - 1].push(position);
+
+        self.update_min_entropy();
+
+        // new bucket index, position and new bucket index of possibly moved cell
+        (self.buckets[new_entropy - 1].len() - 1, moved_opt)
+    }
+
+    /// Remove the cell at the given entropy and bucket_index.
+    /// 
+    /// This returns the new bucket index of the cell. This also might return
+    /// the position and new bucket index of another cell that was also moved in the process
+    fn remove_cell(
+        &mut self,
+        entropy: usize,
+        bucket_index: usize,
+    ) -> Option<(Position, usize)> {
+        let bucket = &mut self.buckets[entropy - 1];
+
+        let last_index = bucket.len() - 1;
+        // If the cell was the last entry in the bucket, nothing was moved due to the swap remove
+        let moved_index = (bucket_index != last_index).then_some(bucket_index);
+
+        bucket.swap_remove(bucket_index);
+        self.num_cells -= 1;
+        self.update_min_entropy();
+
+        moved_index.map(|i| (self.buckets[entropy - 1][i], i))
+    }
+
+    fn update_min_entropy(&mut self) {
+        if self.is_empty() {
+            return
+        }
+        
+        self.min_entropy = self
+            .buckets
+            .iter()
+            .enumerate()
+            .find_map(|(i, bucket)| {
+                if !bucket.is_empty() {
+                    Some(i + 1)
+                } else {
+                    None
+                }
+            })
+            .expect("The bucket queue must not be empty")
     }
 }
