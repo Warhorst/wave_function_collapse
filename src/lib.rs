@@ -17,86 +17,7 @@ pub mod cell;
 pub mod constraints;
 mod random;
 
-// todo
-//  - Edge Colors, so no neighbour constraints have to be set manually
-//  - rotating tiles (this might be possible using a trait)
-//  - MAYBE Providing an iterator, so I can watch the wfc work
-
-/// The builder for a [Wfc].
-pub struct WfcBuilder<T: Clone, C: Cell> {
-    width: usize,
-    height: usize,
-    tiles: Vec<T>,
-    tile_constraints: TileConstraints<T>,
-    random: Random,
-    weights: Vec<f32>,
-    _cell_type: PhantomData<C>,
-}
-
-impl<T, C: Cell> WfcBuilder<T, C>
-where
-    T: Clone,
-{
-    pub fn new(
-        width: usize,
-        height: usize,
-        tiles: Vec<T>,
-    ) -> Self {
-        WfcBuilder {
-            width,
-            height,
-            weights: vec![1.0; tiles.len()],
-            tiles,
-            tile_constraints: TileConstraints::default(),
-            random: Random::new(),
-            _cell_type: PhantomData,
-        }
-    }
-
-    /// Set a custom seed for the WFC
-    pub fn with_seed(
-        mut self,
-        seed: impl Hash,
-    ) -> Self {
-        self.random = Random::from_seed(seed);
-        self
-    }
-
-    pub fn with_weights(
-        mut self,
-        tile_weights: impl IntoIterator<Item = f32>,
-    ) -> Self {
-        self.weights.clear();
-
-        for weight in tile_weights.into_iter() {
-            self.weights.push(weight);
-        }
-
-        self
-    }
-
-    pub fn with_constraint(
-        mut self,
-        constraint: impl Constraint<T> + 'static,
-    ) -> Self {
-        self.tile_constraints.add_constraint(constraint);
-        self
-    }
-
-    /// Validate the input and create a [Wfc].
-    pub fn build(self) -> Result<Wfc<T, C>, WfcError> {
-        let board = Board::<C>::new(self.width, self.height, self.tiles.len(), &self.weights);
-
-        Ok(Wfc {
-            board,
-            tiles: self.tiles,
-            tile_constraints: self.tile_constraints,
-            random: self.random,
-        })
-    }
-}
-
-/// The struct which performs the wave function collapse.
+/// Performs the wave function collapse.
 pub struct Wfc<T: Clone, C: Cell> {
     board: Board<C>,
     tiles: Vec<T>,
@@ -108,7 +29,29 @@ impl<T, C: Cell> Wfc<T, C>
 where
     T: Clone,
 {
-    /// Collapse the WFC until no more tiles are not collapsed.
+    /// Start creating a new [`Wfc`].
+    ///
+    /// * `width`: The width (in [`Position`]s) of the board
+    /// * `height`: The height (in [`Position`]s) of the board
+    /// * `tiles`: The possible tiles in the Wfc. This list should be free of duplicates, as a duplicate just increases its chance of being picked.
+    #[allow(clippy::new_ret_no_self)]
+    pub fn new(
+        width: usize,
+        height: usize,
+        tiles: Vec<T>,
+    ) -> WfcBuilder<T, C> {
+        WfcBuilder {
+            width,
+            height,
+            weights: vec![1.0; tiles.len()],
+            tiles,
+            tile_constraints: TileConstraints::default(),
+            random: Random::new(),
+            _cell_type: PhantomData,
+        }
+    }
+
+    /// Collapse the [`Wfc`] until no more tiles are not collapsed.
     pub fn collapse(mut self) -> Result<Vec<(Position, T)>, WfcError> {
         while !self.board.collapsed() {
             let (pos, cell) = self.board.get_min_entropy_position();
@@ -175,12 +118,83 @@ where
     }
 }
 
+/// The builder for a [`Wfc`].
+pub struct WfcBuilder<T: Clone, C: Cell> {
+    width: usize,
+    height: usize,
+    tiles: Vec<T>,
+    tile_constraints: TileConstraints<T>,
+    random: Random,
+    weights: Vec<f32>,
+    _cell_type: PhantomData<C>,
+}
+
+impl<T, C: Cell> WfcBuilder<T, C>
+where
+    T: Clone,
+{
+    /// Set a custom seed for the [`Wfc`]
+    pub fn with_seed(
+        mut self,
+        seed: impl Hash,
+    ) -> Self {
+        self.random = Random::from_seed(seed);
+        self
+    }
+
+    /// Overwrite the weights used for the tiles in the [`Wfc`]. By default, every
+    /// tile hast the same probability.
+    ///
+    /// The index of the weight in the iterator will be the weight for the tile at the same index.
+    /// Providing more or less weights than there are tiles will produce a [`WfcError::InvalidWeightAmount`]
+    pub fn with_weights(
+        mut self,
+        tile_weights: impl IntoIterator<Item = f32>,
+    ) -> Self {
+        self.weights.clear();
+
+        for weight in tile_weights.into_iter() {
+            self.weights.push(weight);
+        }
+
+        self
+    }
+
+    /// Add a [`Constraint`] to the [`Wfc`].
+    pub fn with_constraint(
+        mut self,
+        constraint: impl Constraint<T> + 'static,
+    ) -> Self {
+        self.tile_constraints.add_constraint(constraint);
+        self
+    }
+
+    /// Validate the input and create a [`Wfc`].
+    pub fn build(self) -> Result<Wfc<T, C>, WfcError> {
+        if self.weights.len() != self.tiles.len() {
+            return Err(WfcError::InvalidWeightAmount {
+                expected: self.tiles.len(),
+                was: self.weights.len(),
+            });
+        }
+
+        let board = Board::<C>::new(self.width, self.height, self.tiles.len(), &self.weights);
+
+        Ok(Wfc {
+            board,
+            tiles: self.tiles,
+            tile_constraints: self.tile_constraints,
+            random: self.random,
+        })
+    }
+}
+
 /// An error for the wave function collapse, which occurs due to configuration errors
 /// or runtime errors.
 #[derive(Debug)]
 pub enum WfcError {
-    /// More tile types are provided than supported by the WFC
-    TooManyTiles { max: usize, was: usize },
+    /// A different amount of weights was set in the WFC than expected.
+    InvalidWeightAmount { expected: usize, was: usize },
     /// A cell has zero entropy after a propagation, which means no tile
     /// can be picked for it
     CellHasZeroEntropy(Position),
@@ -194,9 +208,9 @@ impl Display for WfcError {
         f: &mut Formatter<'_>,
     ) -> std::fmt::Result {
         match self {
-            WfcError::TooManyTiles { max, was } => write!(
+            WfcError::InvalidWeightAmount { expected, was } => write!(
                 f,
-                "{was} tiles where provided, but only {max} are supported!"
+                "{expected} weights were expected, but {was} were provided!"
             ),
             WfcError::CellHasZeroEntropy(pos) => write!(
                 f,

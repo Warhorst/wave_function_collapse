@@ -86,6 +86,8 @@ impl<T> TileConstraints<T> {
 //  This allows for a "Bias Constraint", where based on the neighbours, some tile should have
 //  way higher or lower probability to get picked
 
+/// A Constraint modifies the tile options of a [`crate::cell::Cell`], based on its currently
+/// possible tiles and its neighbours.
 pub trait Constraint<T> {
     /// Check for a specific tile and its given collapsed neighbour if it would be a valid
     /// remaining choice.  

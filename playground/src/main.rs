@@ -10,7 +10,7 @@ use ratatui::{
     widgets::{Block, Cell, Clear, Row, StatefulWidget, Table, TableState, Widget},
 };
 use ratatui_tools::tilemap::{Char, TileMap};
-use wave_function_collapse::{WfcBuilder, cell::DynCell, constraints::PossibleNeighbours};
+use wave_function_collapse::{Wfc, cell::DynCell, constraints::PossibleNeighbours};
 
 // TODO Some ideas to further improve the playground and even make it a standalone application:
 // - Add a seed input (requires a text input widget)
@@ -235,7 +235,7 @@ impl App {
             &tiles,
         );
 
-        WfcBuilder::<Tile, DynCell>::new(self.state.width, self.state.height, tiles)
+        Wfc::<Tile, DynCell>::new(self.state.width, self.state.height, tiles)
             .with_constraint(possible_neighbours)
             .with_weights(self.state.weights.iter().copied())
             .with_seed(42)

@@ -4,12 +4,12 @@ use crate::Tile::*;
 use CellType::*;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use wave_function_collapse::{
-    WfcBuilder,
+    Wfc,
     cell::{BitCell, ConstCell, DynCell},
     constraints::PossibleNeighbours,
 };
 
-// TODO adda benchmark with a very collapsable set of tiles, as a best case scenario
+// TODO add a benchmark with a very collapsable set of tiles, as a best case scenario
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 enum Tile {
@@ -58,21 +58,21 @@ pub fn simple(c: &mut Criterion) {
                 );
 
                 match cell {
-                    Const => WfcBuilder::<Tile, ConstCell<3>>::new(50, 50, tiles)
+                    Const => Wfc::<Tile, ConstCell<3>>::new(50, 50, tiles)
                         .with_constraint(possible_neighbours)
                         .with_seed(42)
                         .build()
                         .unwrap()
                         .collapse()
                         .unwrap(),
-                    Bit => WfcBuilder::<Tile, BitCell>::new(50, 50, tiles)
+                    Bit => Wfc::<Tile, BitCell>::new(50, 50, tiles)
                         .with_constraint(possible_neighbours)
                         .with_seed(42)
                         .build()
                         .unwrap()
                         .collapse()
                         .unwrap(),
-                    Dyn => WfcBuilder::<Tile, DynCell>::new(50, 50, tiles)
+                    Dyn => Wfc::<Tile, DynCell>::new(50, 50, tiles)
                         .with_constraint(possible_neighbours)
                         .with_seed(42)
                         .build()
@@ -93,7 +93,7 @@ pub fn no_constraints(c: &mut Criterion) {
             b.iter(|| {
                 let tiles = vec![Water, Sand, Forest];
 
-                WfcBuilder::<Tile, ConstCell<3>>::new(*dim, *dim, tiles)
+                Wfc::<Tile, ConstCell<3>>::new(*dim, *dim, tiles)
                     .with_seed(42)
                     .build()
                     .unwrap()
@@ -108,30 +108,34 @@ pub fn possible_neighbours(c: &mut Criterion) {
     let dimensions = [50, 75, 100, 125];
 
     for dim in dimensions {
-        c.bench_with_input(BenchmarkId::new("possible_neighbours", dim), &dim, |b, dim| {
-            b.iter(|| {
-                let tiles = vec![Water, Sand, Forest];
-                let possible_neighbours = PossibleNeighbours::new(
-                    [
-                        (Water, Water),
-                        (Water, Sand),
-                        (Sand, Water),
-                        (Sand, Sand),
-                        (Sand, Forest),
-                        (Forest, Forest),
-                    ],
-                    &tiles,
-                );
+        c.bench_with_input(
+            BenchmarkId::new("possible_neighbours", dim),
+            &dim,
+            |b, dim| {
+                b.iter(|| {
+                    let tiles = vec![Water, Sand, Forest];
+                    let possible_neighbours = PossibleNeighbours::new(
+                        [
+                            (Water, Water),
+                            (Water, Sand),
+                            (Sand, Water),
+                            (Sand, Sand),
+                            (Sand, Forest),
+                            (Forest, Forest),
+                        ],
+                        &tiles,
+                    );
 
-                WfcBuilder::<Tile, ConstCell<3>>::new(*dim, *dim, tiles)
-                    .with_constraint(possible_neighbours)
-                    .with_seed(42)
-                    .build()
-                    .unwrap()
-                    .collapse()
-                    .unwrap();
-            })
-        });
+                    Wfc::<Tile, ConstCell<3>>::new(*dim, *dim, tiles)
+                        .with_constraint(possible_neighbours)
+                        .with_seed(42)
+                        .build()
+                        .unwrap()
+                        .collapse()
+                        .unwrap();
+                })
+            },
+        );
     }
 }
 
