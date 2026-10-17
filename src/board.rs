@@ -136,6 +136,7 @@ impl<C: Cell> Board<C> {
 
                 let cell = self.get_cell(pos);
 
+                // Update the cell position in the bucket list
                 if cell.is_collapsed() {
                     if let Some((pos, index)) = self
                         .bucket_queue
@@ -145,7 +146,6 @@ impl<C: Cell> Board<C> {
                         cell.set_bucket_index(index);
                     }
                 } else {
-                    // TODO move cell to new bucket based on entropy
                     let (new_bucket_index, moved_cell_opt) = self.bucket_queue.move_cell(
                         current_entropy as usize,
                         cell.get_bucket_index(),
