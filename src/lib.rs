@@ -15,6 +15,7 @@ use std::{
 mod board;
 pub mod cell;
 pub mod constraints;
+pub mod prob_mod;
 mod random;
 
 /// Performs the wave function collapse.
