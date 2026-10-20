@@ -2,24 +2,70 @@ use pad::position::Position;
 
 use crate::cell::PossibleIndices;
 
-/// Wrapper around the list of [Constraint]s which are configured in the [crate::Wfc].
-pub(crate) struct TileConstraints<T> {
-    constraints: Vec<Box<dyn Constraint<T>>>,
-    /// The preallocated Vec of new indices for a cell
-    new_indices: Vec<u8>
+// TODO Things I want as possible constraints:
+//  - The classic color constraint
+//  - Simple neighbourhood, just like currently
+//  - Directional neighbour restrictions, like the original coast example
+
+/// A Constraint modifies the tile options of a [`crate::cell::Cell`], based on its currently
+/// possible tiles and its neighbours.
+pub trait Constraint<T> {
+    /// Check for a specific tile and its given collapsed neighbour if it would be a valid
+    /// remaining choice.  
+    /// If the tile is valid, it returns a weight modifier. This modifier (alongside the modifiers
+    /// of other constraints) is multiplied with the base weight of the tile to determine the new weight
+    /// for the current cell. **Important:** Returning Some(0.0) is not the same as returning None,
+    /// as the former means the tile is still possible, but now with weight 0.  
+    /// Only the surroundings of the tile to check are taken into consideration for the validation. Some kind
+    /// of global constraint (which for example could access every cell in the current state) can easily lead
+    /// to dead ends. The parameters and capabilities are therefore, by design, sparse.
+    ///
+    /// # Parameters
+    /// * `tile_to_check` - The tile index and its position which I want to know would be valid according to this constraint
+    /// * `neighbours` - The possible tiles and their positions of all neighbours of the tile to check.
+    /// * `tiles` - All actual possible tiles. This can be used to map the tile index to the actual tile for more complex logic
+    ///
+    /// Returns Some(weight_modifier) if the tile to check could be placed on this position, according to this constraint.
+    fn valid(
+        &self,
+        tile_to_check: (u8, Position),
+        neighbours: &[(PossibleIndices, Position)],
+        tiles: &[T],
+    ) -> bool;
 }
 
-impl<T> Default for TileConstraints<T> {
+impl<T, F> Constraint<T> for F
+where
+    F: Fn((u8, Position), &[(PossibleIndices, Position)], &[T]) -> bool,
+{
+    fn valid(
+        &self,
+        tile_to_check: (u8, Position),
+        neighbours: &[(PossibleIndices, Position)],
+        tiles: &[T],
+    ) -> bool {
+        self(tile_to_check, neighbours, tiles)
+    }
+}
+
+/// Wrapper around the list of [`Constraint`]s which are configured in the [`crate::Wfc`].
+pub(super) struct Constraints<T> {
+    constraints: Vec<Box<dyn Constraint<T>>>,
+    /// The preallocated Vec of new indices for a cell
+    new_indices: Vec<u8>,
+}
+
+impl<T> Default for Constraints<T> {
     fn default() -> Self {
-        TileConstraints {
+        Constraints {
             constraints: vec![],
-            new_indices: vec![]
+            new_indices: vec![],
         }
     }
 }
 
-impl<T> TileConstraints<T> {
-    pub(crate) fn add_constraint(
+impl<T> Constraints<T> {
+    pub(super) fn add_constraint(
         &mut self,
         constraint: impl Constraint<T> + 'static,
     ) {
@@ -72,45 +118,6 @@ impl<T> TileConstraints<T> {
 
         &self.new_indices
     }
-}
-
-// todo Things I want as possible constraints:
-//  - The classic color constraint
-//  - Simple neighbourhood, just like currently
-//  - Directional neighbour restrictions, like the original coast example
-
-// todo the Constraint should not return a bool, but an optional weight modifier.
-//  - Every cell should hold the weights for their tiles
-//  - If the modifier is not None, the weight for that tile gets set accordingly
-//  - The initial weight for every tile is the setting provided to the WFC
-//  This allows for a "Bias Constraint", where based on the neighbours, some tile should have
-//  way higher or lower probability to get picked
-
-/// A Constraint modifies the tile options of a [`crate::cell::Cell`], based on its currently
-/// possible tiles and its neighbours.
-pub trait Constraint<T> {
-    /// Check for a specific tile and its given collapsed neighbour if it would be a valid
-    /// remaining choice.  
-    /// If the tile is valid, it returns a weight modifier. This modifier (alongside the modifiers
-    /// of other constraints) is multiplied with the base weight of the tile to determine the new weight
-    /// for the current cell. **Important:** Returning Some(0.0) is not the same as returning None,
-    /// as the former means the tile is still possible, but now with weight 0.  
-    /// Only the surroundings of the tile to check are taken into consideration for the validation. Some kind
-    /// of global constraint (which for example could access every cell in the current state) can easily lead
-    /// to dead ends. The parameters and capabilities are therefore, by design, sparse.
-    ///
-    /// # Parameters
-    /// * `tile_to_check` - The tile index and its position which I want to know would be valid according to this constraint
-    /// * `neighbours` - The possible tiles and their positions of all neighbours of the tile to check.
-    /// * `tiles` - All actual possible tiles. This can be used to map the tile index to the actual tile for more complex logic
-    ///
-    /// Returns Some(weight_modifier) if the tile to check could be placed on this position, according to this constraint.
-    fn valid(
-        &self,
-        tile_to_check: (u8, Position),
-        neighbours: &[(PossibleIndices, Position)],
-        tiles: &[T],
-    ) -> bool;
 }
 
 /// A [Constraint] which defines what tiles can be neighboured to each other.

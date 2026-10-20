@@ -237,8 +237,27 @@ impl App {
 
         Wfc::<Tile, DynCell>::new(self.state.width, self.state.height, tiles)
             .with_constraint(possible_neighbours)
+            .with_probability_modifier(
+                |weights: &mut Vec<f32>,
+                 p: Position,
+                 width: usize,
+                 height: usize,
+                 _: &[(&Tile, Position)]| {
+                    // Water at the border gets more likely, vice versa for land
+                    let (x, y) = (p.x, p.y);
+                    let dx = (x as f32 - width as f32 / 2.0) / (width as f32 / 2.0);
+                    let dy = (y as f32 - height as f32 / 2.0) / (height as f32 / 2.0);
+
+                    let water_prob = f32::min(1.0, f32::sqrt(dx * dx + dy * dy));
+                    let other_prob = f32::max(0.0, 1.0 - f32::sqrt(dx * dx + dy * dy));
+
+                    weights[0] = water_prob;
+                    weights[1] = other_prob;
+                    weights[2] = other_prob;
+                },
+            )
             .with_weights(self.state.weights.iter().copied())
-            .with_seed(42)
+            // .with_seed(42)
             .build()
             .unwrap()
             .collapse()

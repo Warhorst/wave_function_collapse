@@ -1,4 +1,4 @@
-use crate::constraints::TileConstraints;
+use crate::constraints::Constraints;
 use crate::{WfcError, cell::Cell};
 use pad::p;
 use pad::position::Position;
@@ -9,12 +9,11 @@ use std::collections::VecDeque;
 /// The WFC is done if all positions on the board are collapsed.
 pub struct Board<C: Cell> {
     /// Width of the [Board]
-    width: usize,
+    pub (super) width: usize,
     /// Height of the [Board]
-    height: usize,
+    pub (super) height: usize,
     /// The [Cell]s of the [Board], which tell what tiles are still possible
     cells: Vec<C>,
-    pub(crate) weights: Vec<f32>,
     bucket_queue: BucketQueue,
     /// The preallocated queue which will be used to hold positions to propagate next
     /// in the propagation step.
@@ -26,7 +25,6 @@ impl<C: Cell> Board<C> {
         width: usize,
         height: usize,
         num_tiles: usize,
-        weights: &[f32],
     ) -> Self {
         let cells = (0..(width * height))
             .map(|i| C::new(num_tiles, i))
@@ -34,13 +32,10 @@ impl<C: Cell> Board<C> {
         let bucket_queue =
             BucketQueue::initialize(p!(0, 0).iter_to(p!(width - 1, height - 1)), num_tiles);
 
-        let weights = weights.to_vec();
-
         Board {
             width,
             height,
             cells,
-            weights,
             bucket_queue,
             propagation_queue: VecDeque::new(),
         }
@@ -74,10 +69,10 @@ impl<C: Cell> Board<C> {
     /// Adapt all the cardinal neighbours of the given collapsed position
     /// This works recursive, so a collapsed neighbour will propagate the collapse to all
     /// its neighbours
-    pub(crate) fn propagate<T>(
+    pub(super) fn propagate<T>(
         &mut self,
         collapsed_position: Position,
-        tile_constraints: &mut TileConstraints<T>,
+        tile_constraints: &mut Constraints<T>,
         all_tiles: &[T],
     ) -> Result<(), WfcError> {
         // init the propagation queue with the just collapsed position

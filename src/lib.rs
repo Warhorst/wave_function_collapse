@@ -1,7 +1,8 @@
 use crate::{
     board::Board,
     cell::{Cell, PossibleIndices},
-    constraints::{Constraint, TileConstraints},
+    constraints::{Constraint, Constraints},
+    prob_mod::{ProbabilityModifier, ProbabilityModifiers},
     random::Random,
 };
 use pad::position::Position;
@@ -22,7 +23,9 @@ mod random;
 pub struct Wfc<T: Clone, C: Cell> {
     board: Board<C>,
     tiles: Vec<T>,
-    tile_constraints: TileConstraints<T>,
+    weights: Vec<f32>,
+    tile_constraints: Constraints<T>,
+    probability_modifiers: ProbabilityModifiers<T>,
     random: Random,
 }
 
@@ -41,12 +44,14 @@ where
         height: usize,
         tiles: Vec<T>,
     ) -> WfcBuilder<T, C> {
+        let num_tiles = tiles.len();
         WfcBuilder {
             width,
             height,
-            weights: vec![1.0; tiles.len()],
+            weights: vec![1.0; num_tiles],
             tiles,
-            tile_constraints: TileConstraints::default(),
+            constraints: Constraints::default(),
+            probability_modifiers: ProbabilityModifiers::new(num_tiles),
             random: Random::new(),
             _cell_type: PhantomData,
         }
@@ -57,10 +62,21 @@ where
         while !self.board.collapsed() {
             let (pos, cell) = self.board.get_min_entropy_position();
 
+            // TODO performance got worse
+            let collapsed_positions = self
+                .board
+                .get_collapsed_indices()
+                .map(|(pos, i)| (&self.tiles[i], pos));
+            let modified_weights = self.probability_modifiers.modify_probability(
+                &self.weights,
+                collapsed_positions,
+                pos,
+                self.board.width,
+                self.board.height,
+            );
+
             let possible_indices = cell.get_possible_indices();
-            let weights = possible_indices
-                .iter()
-                .map(|i| self.board.weights[i as usize]);
+            let weights = possible_indices.iter().map(|i| modified_weights[i as usize]);
             let index = Self::choose_next_index(&mut self.random, possible_indices, weights);
             self.board.collapse_position(pos, index);
             self.board
@@ -124,7 +140,8 @@ pub struct WfcBuilder<T: Clone, C: Cell> {
     width: usize,
     height: usize,
     tiles: Vec<T>,
-    tile_constraints: TileConstraints<T>,
+    constraints: Constraints<T>,
+    probability_modifiers: ProbabilityModifiers<T>,
     random: Random,
     weights: Vec<f32>,
     _cell_type: PhantomData<C>,
@@ -166,7 +183,16 @@ where
         mut self,
         constraint: impl Constraint<T> + 'static,
     ) -> Self {
-        self.tile_constraints.add_constraint(constraint);
+        self.constraints.add_constraint(constraint);
+        self
+    }
+
+    /// Add a [`ProbabilityModifier`] to the [`Wfc`].
+    pub fn with_probability_modifier(
+        mut self,
+        modifier: impl ProbabilityModifier<T> + 'static,
+    ) -> Self {
+        self.probability_modifiers.add_modifier(modifier);
         self
     }
 
@@ -179,12 +205,14 @@ where
             });
         }
 
-        let board = Board::<C>::new(self.width, self.height, self.tiles.len(), &self.weights);
+        let board = Board::<C>::new(self.width, self.height, self.tiles.len());
 
         Ok(Wfc {
             board,
             tiles: self.tiles,
-            tile_constraints: self.tile_constraints,
+            weights: self.weights,
+            tile_constraints: self.constraints,
+            probability_modifiers: self.probability_modifiers,
             random: self.random,
         })
     }
