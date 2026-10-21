@@ -78,9 +78,7 @@ where
             let possible_indices = cell.get_possible_indices();
             let weights = possible_indices.iter().map(|i| modified_weights[i as usize]);
             let index = Self::choose_next_index(&mut self.random, possible_indices, weights);
-            self.board.collapse_position(pos, index);
-            self.board
-                .propagate(pos, &mut self.tile_constraints, &self.tiles)?;
+            self.board.collapse_position(pos, index, &mut self.tile_constraints, &self.tiles)?;
         }
 
         Ok(self
@@ -96,42 +94,6 @@ where
         tile_weights: impl IntoIterator<Item = f32>,
     ) -> u8 {
         random.choose_weighted(tile_weights, possible_indices)
-    }
-}
-
-impl<T, C: Cell> Wfc<T, C>
-where
-    T: Clone + PartialEq,
-{
-    /// Collapse the board partially with the provided tiles.
-    ///
-    /// This will at first collapse all positions and afterward propagate all the changes
-    /// to their neighbour positions. This allows for results that would otherwise be impossible
-    /// due to the constraints. It might render the WFC impossible to solve.
-    pub fn collapse_tiles(
-        &mut self,
-        tiles: impl IntoIterator<Item = (Position, T)>,
-    ) -> Result<(), WfcError> {
-        let tiles = tiles.into_iter().collect::<Vec<_>>();
-        let get_tile_index = |tile: &T| {
-            self.tiles
-                .iter()
-                .enumerate()
-                .find(|(_, t)| *t == tile)
-                .unwrap()
-                .0 as u8
-        };
-
-        for (pos, t) in &tiles {
-            self.board.collapse_position(*pos, get_tile_index(t));
-        }
-
-        for (pos, _) in tiles {
-            self.board
-                .propagate(pos, &mut self.tile_constraints, &self.tiles)?
-        }
-
-        Ok(())
     }
 }
 

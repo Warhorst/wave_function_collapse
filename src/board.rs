@@ -9,15 +9,17 @@ use std::collections::VecDeque;
 /// The WFC is done if all positions on the board are collapsed.
 pub struct Board<C: Cell> {
     /// Width of the [Board]
-    pub (super) width: usize,
+    pub(super) width: usize,
     /// Height of the [Board]
-    pub (super) height: usize,
+    pub(super) height: usize,
     /// The [Cell]s of the [Board], which tell what tiles are still possible
     cells: Vec<C>,
     bucket_queue: BucketQueue,
     /// The preallocated queue which will be used to hold positions to propagate next
     /// in the propagation step.
     propagation_queue: VecDeque<Position>,
+    /// Preallocated vec to store the collapsed positions and their tile indices when collapsing.
+    collapsed_positions: Vec<(Position, u8)>
 }
 
 impl<C: Cell> Board<C> {
@@ -38,6 +40,7 @@ impl<C: Cell> Board<C> {
             cells,
             bucket_queue,
             propagation_queue: VecDeque::new(),
+            collapsed_positions: Vec::with_capacity((width * height) / 10)
         }
     }
 
@@ -47,11 +50,16 @@ impl<C: Cell> Board<C> {
     }
 
     /// Collapse the cell at the given position and set its tile index to the given one
-    pub fn collapse_position(
+    pub fn collapse_position<T>(
         &mut self,
         position: Position,
         index: u8,
-    ) {
+        tile_constraints: &mut Constraints<T>,
+        all_tiles: &[T],
+    ) -> Result<&[(Position, u8)], WfcError> {
+        self.collapsed_positions.clear();
+        self.collapsed_positions.push((position, index));
+    
         let cell = self.get_cell_mut(position);
         let entropy = cell.entropy();
         cell.collapse(index);
@@ -64,17 +72,19 @@ impl<C: Cell> Board<C> {
             let cell = self.get_cell_mut(pos);
             cell.set_bucket_index(index);
         }
+
+        self.propagate(position, tile_constraints, all_tiles)
     }
 
     /// Adapt all the cardinal neighbours of the given collapsed position
     /// This works recursive, so a collapsed neighbour will propagate the collapse to all
     /// its neighbours
-    pub(super) fn propagate<T>(
+    fn propagate<T>(
         &mut self,
         collapsed_position: Position,
         tile_constraints: &mut Constraints<T>,
         all_tiles: &[T],
-    ) -> Result<(), WfcError> {
+    ) -> Result<&[(Position, u8)], WfcError> {
         // init the propagation queue with the just collapsed position
         self.propagation_queue.push_back(collapsed_position);
 
@@ -129,6 +139,12 @@ impl<C: Cell> Board<C> {
                 let cell_mut = self.get_cell_mut(pos);
                 cell_mut.set_indices(new_indices.iter().copied());
 
+                // Add the collapsed cell to the vec of collapsed cells
+                if cell_mut.is_collapsed() {
+                    let collapsed_index = cell_mut.get_collapsed_index();
+                    self.collapsed_positions.push((pos, collapsed_index));
+                }
+
                 let cell = self.get_cell(pos);
 
                 // Update the cell position in the bucket list
@@ -159,7 +175,7 @@ impl<C: Cell> Board<C> {
             }
         }
 
-        Ok(())
+        Ok(&self.collapsed_positions)
     }
 
     fn pos_in_bounds(
@@ -268,7 +284,7 @@ impl BucketQueue {
     }
 
     /// Remove the cell at the given entropy and bucket_index.
-    /// 
+    ///
     /// This returns the new bucket index of the cell. This also might return
     /// the position and new bucket index of another cell that was also moved in the process
     fn remove_cell(
@@ -291,9 +307,9 @@ impl BucketQueue {
 
     fn update_min_entropy(&mut self) {
         if self.is_empty() {
-            return
+            return;
         }
-        
+
         self.min_entropy = self
             .buckets
             .iter()
