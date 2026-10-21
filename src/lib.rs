@@ -24,9 +24,10 @@ pub struct Wfc<T: Clone, C: Cell> {
     board: Board<C>,
     tiles: Vec<T>,
     weights: Vec<f32>,
-    tile_constraints: Constraints<T>,
+    constraints: Constraints<T>,
     probability_modifiers: ProbabilityModifiers<T>,
     random: Random,
+    collapsed_positions: Vec<(Position, T)>,
 }
 
 impl<T, C: Cell> Wfc<T, C>
@@ -38,8 +39,7 @@ where
     /// * `width`: The width (in [`Position`]s) of the board
     /// * `height`: The height (in [`Position`]s) of the board
     /// * `tiles`: The possible tiles in the Wfc. This list should be free of duplicates, as a duplicate just increases its chance of being picked.
-    #[allow(clippy::new_ret_no_self)]
-    pub fn new(
+    pub fn new_builder(
         width: usize,
         height: usize,
         tiles: Vec<T>,
@@ -57,35 +57,57 @@ where
         }
     }
 
+    fn new(
+        board: Board<C>,
+        tiles: Vec<T>,
+        weights: Vec<f32>,
+        constraints: Constraints<T>,
+        probability_modifiers: ProbabilityModifiers<T>,
+        random: Random,
+    ) -> Self {
+        let width = board.width;
+        let height = board.height;
+
+        Wfc {
+            board,
+            tiles,
+            weights,
+            constraints,
+            probability_modifiers,
+            random,
+            collapsed_positions: Vec::with_capacity(width * height),
+        }
+    }
+
     /// Collapse the [`Wfc`] until no more tiles are not collapsed.
     pub fn collapse(mut self) -> Result<Vec<(Position, T)>, WfcError> {
         while !self.board.collapsed() {
             let (pos, cell) = self.board.get_min_entropy_position();
 
-            // TODO performance got worse
-            let collapsed_positions = self
-                .board
-                .get_collapsed_indices()
-                .map(|(pos, i)| (&self.tiles[i], pos));
             let modified_weights = self.probability_modifiers.modify_probability(
                 &self.weights,
-                collapsed_positions,
+                &self.collapsed_positions,
                 pos,
                 self.board.width,
                 self.board.height,
             );
 
             let possible_indices = cell.get_possible_indices();
-            let weights = possible_indices.iter().map(|i| modified_weights[i as usize]);
+            let weights = possible_indices
+                .iter()
+                .map(|i| modified_weights[i as usize]);
             let index = Self::choose_next_index(&mut self.random, possible_indices, weights);
-            self.board.collapse_position(pos, index, &mut self.tile_constraints, &self.tiles)?;
+            let collapsed_positions =
+                self.board
+                    .collapse_position(pos, index, &mut self.constraints, &self.tiles)?;
+
+            collapsed_positions.iter().for_each(|(pos, i)| {
+                self.collapsed_positions
+                    .push((*pos, self.tiles[*i as usize].clone()))
+            });
         }
 
-        Ok(self
-            .board
-            .get_collapsed_indices()
-            .map(|(pos, index)| (pos, self.tiles[index].clone()))
-            .collect())
+        Ok(self.collapsed_positions)
     }
 
     fn choose_next_index(
@@ -169,14 +191,14 @@ where
 
         let board = Board::<C>::new(self.width, self.height, self.tiles.len());
 
-        Ok(Wfc {
+        Ok(Wfc::new(
             board,
-            tiles: self.tiles,
-            weights: self.weights,
-            tile_constraints: self.constraints,
-            probability_modifiers: self.probability_modifiers,
-            random: self.random,
-        })
+            self.tiles,
+            self.weights,
+            self.constraints,
+            self.probability_modifiers,
+            self.random,
+        ))
     }
 }
 

@@ -58,21 +58,21 @@ pub fn simple(c: &mut Criterion) {
                 );
 
                 match cell {
-                    Const => Wfc::<Tile, ConstCell<3>>::new(50, 50, tiles)
+                    Const => Wfc::<Tile, ConstCell<3>>::new_builder(50, 50, tiles)
                         .with_constraint(possible_neighbours)
                         .with_seed(42)
                         .build()
                         .unwrap()
                         .collapse()
                         .unwrap(),
-                    Bit => Wfc::<Tile, BitCell>::new(50, 50, tiles)
+                    Bit => Wfc::<Tile, BitCell>::new_builder(50, 50, tiles)
                         .with_constraint(possible_neighbours)
                         .with_seed(42)
                         .build()
                         .unwrap()
                         .collapse()
                         .unwrap(),
-                    Dyn => Wfc::<Tile, DynCell>::new(50, 50, tiles)
+                    Dyn => Wfc::<Tile, DynCell>::new_builder(50, 50, tiles)
                         .with_constraint(possible_neighbours)
                         .with_seed(42)
                         .build()
@@ -89,11 +89,11 @@ pub fn no_constraints(c: &mut Criterion) {
     let dimensions = [50, 75, 100, 125, 250, 500];
 
     for dim in dimensions {
-        c.bench_with_input(BenchmarkId::new("worst_case", dim), &dim, |b, dim| {
+        c.bench_with_input(BenchmarkId::new("no_constraints", dim), &dim, |b, dim| {
             b.iter(|| {
                 let tiles = vec![Water, Sand, Forest];
 
-                Wfc::<Tile, ConstCell<3>>::new(*dim, *dim, tiles)
+                Wfc::<Tile, ConstCell<3>>::new_builder(*dim, *dim, tiles)
                     .with_seed(42)
                     .build()
                     .unwrap()
@@ -126,7 +126,7 @@ pub fn possible_neighbours(c: &mut Criterion) {
                         &tiles,
                     );
 
-                    Wfc::<Tile, ConstCell<3>>::new(*dim, *dim, tiles)
+                    Wfc::<Tile, ConstCell<3>>::new_builder(*dim, *dim, tiles)
                         .with_constraint(possible_neighbours)
                         .with_seed(42)
                         .build()

@@ -208,12 +208,6 @@ impl<C: Cell> Board<C> {
             .get_mut(self.width * pos.y as usize + pos.x as usize)
             .unwrap_or_else(|| panic!("A cell at position {:?} should exist", pos))
     }
-
-    pub fn get_collapsed_indices(&self) -> impl Iterator<Item = (Position, usize)> + '_ {
-        p!(0, 0)
-            .iter_to(p!(self.width - 1, self.height - 1))
-            .map(|pos| (pos, self.get_cell(pos).get_collapsed_index() as usize))
-    }
 }
 
 struct BucketQueue {

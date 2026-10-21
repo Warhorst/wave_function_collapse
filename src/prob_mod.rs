@@ -13,13 +13,13 @@ pub trait ProbabilityModifier<T> {
         position: Position,
         width: usize,
         height: usize,
-        collapsed_positions: &[(&T, Position)],
+        collapsed_positions: &[(Position, T)],
     );
 }
 
 impl<T, F> ProbabilityModifier<T> for F
 where
-    F: Fn(&mut Vec<f32>, Position, usize, usize, &[(&T, Position)]),
+    F: Fn(&mut Vec<f32>, Position, usize, usize, &[(Position, T)]),
 {
     fn modify_probability(
         &self,
@@ -27,7 +27,7 @@ where
         position: Position,
         width: usize,
         height: usize,
-        collapsed_positions: &[(&T, Position)],
+        collapsed_positions: &[(Position, T)],
     ) {
         self(weights, position, width, height, collapsed_positions)
     }
@@ -50,7 +50,7 @@ impl<T> ProbabilityModifiers<T> {
     pub(super) fn modify_probability<'a>(
         &mut self,
         weights: impl IntoIterator<Item = &'a f32>,
-        collapsed_positions: impl IntoIterator<Item = (&'a T, Position)>,
+        collapsed_positions: &[(Position, T)],
         position: Position,
         width: usize,
         height: usize,
@@ -66,16 +66,13 @@ impl<T> ProbabilityModifiers<T> {
             .enumerate()
             .for_each(|(i, w)| self.weights[i] = w);
 
-        // TODO the WFC itself should hold a vec of all collapsed positions and provide these as a reference rather than an iter
-        let collapsed_positions = collapsed_positions.into_iter().collect::<Vec<_>>();
-
         self.modifiers.iter().for_each(|m| {
             m.modify_probability(
                 &mut self.weights,
                 position,
                 width,
                 height,
-                &collapsed_positions,
+                collapsed_positions,
             )
         });
 
