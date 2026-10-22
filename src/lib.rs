@@ -85,11 +85,12 @@ where
             let (pos, cell) = self.board.get_min_entropy_position();
 
             let modified_weights = self.probability_modifiers.modify_probability(
-                &self.weights,
-                &self.collapsed_positions,
                 pos,
+                &self.weights,
                 self.board.width,
                 self.board.height,
+                &self.tiles,
+                &self.collapsed_positions,
             );
 
             let possible_indices = cell.get_possible_indices();

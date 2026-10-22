@@ -10,7 +10,9 @@ use ratatui::{
     widgets::{Block, Cell, Clear, Row, StatefulWidget, Table, TableState, Widget},
 };
 use ratatui_tools::tilemap::{Char, TileMap};
-use wave_function_collapse::{Wfc, cell::DynCell, constraints::PossibleNeighbours};
+use wave_function_collapse::{
+    Wfc, cell::DynCell, constraints::PossibleNeighbours, prob_mod::ProbModContext,
+};
 
 // TODO Some ideas to further improve the playground and even make it a standalone application:
 // - Add a seed input (requires a text input widget)
@@ -238,11 +240,10 @@ impl App {
         Wfc::<Tile, DynCell>::new_builder(self.state.width, self.state.height, tiles)
             .with_constraint(possible_neighbours)
             .with_probability_modifier(
-                |weights: &mut Vec<f32>,
-                 p: Position,
-                 width: usize,
-                 height: usize,
-                 _: &[(Position, Tile)]| {
+                |p: Position, weights: &mut Vec<f32>, context: ProbModContext<Tile>| {
+                    let width = context.width;
+                    let height = context.height;
+                
                     // Water at the border gets more likely, vice versa for land
                     let (x, y) = (p.x, p.y);
                     let dx = (x as f32 - width as f32 / 2.0) / (width as f32 / 2.0);

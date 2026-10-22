@@ -7,29 +7,43 @@ use pad::position::Position;
 /// Modifies the probability of tiles. The modifiers are applied when a tile to
 /// collapse should be picked.
 pub trait ProbabilityModifier<T> {
+    /// Modifiy the tile probabilities for the given position.
+    ///
+    /// * `position`: The [`Position`] which tile probabilities will be modified
+    /// * `position`: The weights to modify. These might be the base weigths or, when working with multiple modifiers, the modified weights of a previous modifier.
+    /// * `context`: The [`ProbModContext`] which provides additional data that might be relevant for the modication.
     fn modify_probability(
         &self,
-        weights: &mut Vec<f32>,
         position: Position,
-        width: usize,
-        height: usize,
-        collapsed_positions: &[(Position, T)],
+        weights: &mut Vec<f32>,
+        context: ProbModContext<T>,
     );
+}
+
+/// Context for a [`ProbabilityModifier`] which contains relevant, read-only data
+/// for the modification.
+pub struct ProbModContext<'a, T> {
+    /// The width of the board
+    pub width: usize,
+    /// The height of the board
+    pub height: usize,
+    /// All existing tiles in the WFC. The index of the tile is the same as the index to the weight of the tile.
+    pub tiles: &'a [T],
+    /// All currently collapsed positions in the WFC
+    pub collapsed_positions: &'a [(Position, T)],
 }
 
 impl<T, F> ProbabilityModifier<T> for F
 where
-    F: Fn(&mut Vec<f32>, Position, usize, usize, &[(Position, T)]),
+    F: Fn(Position, &mut Vec<f32>, ProbModContext<T>),
 {
     fn modify_probability(
         &self,
-        weights: &mut Vec<f32>,
         position: Position,
-        width: usize,
-        height: usize,
-        collapsed_positions: &[(Position, T)],
+        weights: &mut Vec<f32>,
+        context: ProbModContext<T>,
     ) {
-        self(weights, position, width, height, collapsed_positions)
+        self(position, weights, context)
     }
 }
 
@@ -49,11 +63,12 @@ impl<T> ProbabilityModifiers<T> {
 
     pub(super) fn modify_probability<'a>(
         &mut self,
-        weights: impl IntoIterator<Item = &'a f32>,
-        collapsed_positions: &[(Position, T)],
         position: Position,
+        weights: impl IntoIterator<Item = &'a f32>,
         width: usize,
         height: usize,
+        tiles: &[T],
+        collapsed_positions: &[(Position, T)],
     ) -> &[f32]
     where
         T: 'a,
@@ -68,11 +83,14 @@ impl<T> ProbabilityModifiers<T> {
 
         self.modifiers.iter().for_each(|m| {
             m.modify_probability(
-                &mut self.weights,
                 position,
-                width,
-                height,
-                collapsed_positions,
+                &mut self.weights,
+                ProbModContext {
+                    width,
+                    height,
+                    tiles,
+                    collapsed_positions,
+                },
             )
         });
 
