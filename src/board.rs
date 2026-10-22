@@ -54,7 +54,7 @@ impl<C: Cell> Board<C> {
         &mut self,
         position: Position,
         index: u8,
-        tile_constraints: &mut Constraints<T>,
+        constraints: &mut Constraints<T>,
         all_tiles: &[T],
     ) -> Result<&[(Position, u8)], WfcError> {
         self.collapsed_positions.clear();
@@ -73,7 +73,7 @@ impl<C: Cell> Board<C> {
             cell.set_bucket_index(index);
         }
 
-        self.propagate(position, tile_constraints, all_tiles)
+        self.propagate(position, constraints, all_tiles)
     }
 
     /// Adapt all the cardinal neighbours of the given collapsed position
@@ -82,7 +82,7 @@ impl<C: Cell> Board<C> {
     fn propagate<T>(
         &mut self,
         collapsed_position: Position,
-        tile_constraints: &mut Constraints<T>,
+        constraints: &mut Constraints<T>,
         all_tiles: &[T],
     ) -> Result<&[(Position, u8)], WfcError> {
         // init the propagation queue with the just collapsed position
@@ -116,7 +116,7 @@ impl<C: Cell> Board<C> {
                 let current_entropy = cell.entropy();
                 let cell_indices = cell.get_possible_indices();
                 let new_indices =
-                    tile_constraints.update_cell((cell_indices, pos), neighbours, all_tiles);
+                    constraints.update_cell((cell_indices, pos), neighbours, all_tiles);
 
                 // If the new indices are empty, it means there is
                 // no tile which fulfills all constraints. This is an error
