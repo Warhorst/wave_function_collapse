@@ -73,8 +73,6 @@ impl<T> ProbabilityModifiers<T> {
     where
         T: 'a,
     {
-        // TODO maybe make the weights a special struct which holds its original weights and its currently modified weighst
-        // Set the weights to the current weights
         weights
             .into_iter()
             .copied()
