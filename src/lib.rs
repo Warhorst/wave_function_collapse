@@ -4,8 +4,9 @@ use crate::{
     constraints::{Constraint, Constraints},
     prob_mod::{ProbabilityModifier, ProbabilityModifiers},
     random::Random,
+    tile_filter::{TileFilter, TileFilters},
 };
-use pad::position::Position;
+use pad::{p, position::Position};
 use std::{
     error::Error,
     fmt::{Display, Formatter},
@@ -18,6 +19,7 @@ pub mod cell;
 pub mod constraints;
 pub mod prob_mod;
 mod random;
+pub mod tile_filter;
 
 /// Performs the wave function collapse.
 pub struct Wfc<T: Clone, C: Cell> {
@@ -52,6 +54,7 @@ where
             tiles,
             constraints: Constraints::default(),
             probability_modifiers: ProbabilityModifiers::new(num_tiles),
+            tile_filters: TileFilters::new(num_tiles),
             random: Random::new(),
             _cell_type: PhantomData,
         }
@@ -127,6 +130,7 @@ pub struct WfcBuilder<T: Clone, C: Cell> {
     tiles: Vec<T>,
     constraints: Constraints<T>,
     probability_modifiers: ProbabilityModifiers<T>,
+    tile_filters: TileFilters<T>,
     random: Random,
     weights: Vec<f32>,
     _cell_type: PhantomData<C>,
@@ -181,8 +185,17 @@ where
         self
     }
 
+    /// Add a [`TileFilter`] to the [`Wfc`].
+    pub fn with_tile_filter(
+        mut self,
+        tile_filter: impl TileFilter<T> + 'static,
+    ) -> Self {
+        self.tile_filters.add_tile_filter(tile_filter);
+        self
+    }
+
     /// Validate the input and create a [`Wfc`].
-    pub fn build(self) -> Result<Wfc<T, C>, WfcError> {
+    pub fn build(mut self) -> Result<Wfc<T, C>, WfcError> {
         if self.weights.len() != self.tiles.len() {
             return Err(WfcError::InvalidWeightAmount {
                 expected: self.tiles.len(),
@@ -190,7 +203,15 @@ where
             });
         }
 
-        let board = Board::<C>::new(self.width, self.height, self.tiles.len());
+        let mut board = Board::<C>::new(self.width, self.height, self.tiles.len());
+
+        for pos in p!(0, 0).iter_to(p!(self.width - 1, self.height - 1)) {
+            let filtered_tiles =
+                self.tile_filters
+                    .filter_tiles(pos, self.width, self.height, &self.tiles);
+
+            board.filter_tiles(pos, filtered_tiles);
+        }
 
         Ok(Wfc::new(
             board,

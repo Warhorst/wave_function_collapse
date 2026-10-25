@@ -1,4 +1,5 @@
 use crate::constraints::Constraints;
+use crate::tile_filter::FilteredTiles;
 use crate::{WfcError, cell::Cell};
 use pad::p;
 use pad::position::Position;
@@ -14,12 +15,13 @@ pub struct Board<C: Cell> {
     pub(super) height: usize,
     /// The [Cell]s of the [Board], which tell what tiles are still possible
     cells: Vec<C>,
+    /// Bucket queue which is used to determine the next cell with minimal entropy.
     bucket_queue: BucketQueue,
     /// The preallocated queue which will be used to hold positions to propagate next
     /// in the propagation step.
     propagation_queue: VecDeque<Position>,
     /// Preallocated vec to store the collapsed positions and their tile indices when collapsing.
-    collapsed_positions: Vec<(Position, u8)>
+    collapsed_positions: Vec<(Position, u8)>,
 }
 
 impl<C: Cell> Board<C> {
@@ -40,8 +42,20 @@ impl<C: Cell> Board<C> {
             cells,
             bucket_queue,
             propagation_queue: VecDeque::new(),
-            collapsed_positions: Vec::with_capacity((width * height) / 10)
+            collapsed_positions: Vec::with_capacity((width * height) / 10),
         }
+    }
+
+    /// Modify the possible indices of the [`Cell`] at the given [`Position`] based on the given
+    /// [`FilteredTiles`]. Should only be used before starting the collapse, as any further cell update
+    /// should be handled by the propagation.
+    pub fn filter_tiles(
+        &mut self,
+        position: Position,
+        filtered_tiles: &FilteredTiles,
+    ) {
+        let cell = self.get_cell_mut(position);
+        cell.set_indices(filtered_tiles.get_possible_tile_indices());
     }
 
     /// tells if the full board is collapsed
@@ -59,7 +73,7 @@ impl<C: Cell> Board<C> {
     ) -> Result<&[(Position, u8)], WfcError> {
         self.collapsed_positions.clear();
         self.collapsed_positions.push((position, index));
-    
+
         let cell = self.get_cell_mut(position);
         let entropy = cell.entropy();
         cell.collapse(index);
