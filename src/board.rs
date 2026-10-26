@@ -9,11 +9,11 @@ use thiserror::Error;
 /// Contains the current state of the WFC with all the cells at their respective positions.
 /// The WFC is done if all positions on the board are collapsed.
 pub struct Board<C: Cell> {
-    /// Width of the [Board]
+    /// Width of the [`Board`]
     pub(super) width: usize,
-    /// Height of the [Board]
+    /// Height of the [`Board`]
     pub(super) height: usize,
-    /// The [Cell]s of the [Board], which tell what tiles are still possible
+    /// The [`Cell`]s of the [`Board`], which tell what tiles are still possible
     cells: Vec<C>,
     /// Bucket queue which is used to determine the next cell with minimal entropy.
     bucket_queue: BucketQueue,
@@ -64,13 +64,13 @@ impl<C: Cell> Board<C> {
         Ok(())
     }
 
-    /// tells if the full board is collapsed
+    /// Tells if the full board is collapsed
     pub fn collapsed(&self) -> bool {
         self.bucket_queue.is_empty()
     }
 
     /// Collapse the cell at the given position and set its tile index to the given one
-    pub fn collapse_position<T>(
+    pub(crate) fn collapse_position<T>(
         &mut self,
         position: Position,
         index: u8,
@@ -97,7 +97,7 @@ impl<C: Cell> Board<C> {
     }
 
     /// Adapt all the cardinal neighbours of the given collapsed position
-    /// This works recursive, so a collapsed neighbour will propagate the collapse to all
+    /// This works recursively, so a collapsed neighbour will propagate the collapse to all
     /// its neighbours
     fn propagate<T>(
         &mut self,
@@ -230,6 +230,9 @@ impl<C: Cell> Board<C> {
     }
 }
 
+/// [`Bucket Queue`](https://en.wikipedia.org/wiki/Bucket_queue) implementation
+/// where every bucket is a possible entropy (from 1 to max) and the items in the buckets
+/// are positions of [`Cell`]s on the [`Board`].
 struct BucketQueue {
     min_entropy: usize,
     buckets: Vec<Vec<Position>>,

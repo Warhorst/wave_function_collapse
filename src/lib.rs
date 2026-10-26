@@ -1,3 +1,5 @@
+#![deny(rustdoc::broken_intra_doc_links)]
+
 use crate::{
     board::{Board, BoardError},
     cell::{Cell, PossibleIndices},
@@ -10,7 +12,7 @@ use pad::{p, position::Position};
 use std::{hash::Hash, marker::PhantomData};
 use thiserror::Error;
 
-mod board;
+pub mod board;
 pub mod cell;
 pub mod constraints;
 pub mod prob_mod;

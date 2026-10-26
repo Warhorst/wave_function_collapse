@@ -1,36 +1,36 @@
 use bitarray::BitArray;
 
-/// A [Cell] contains the possible tiles (or rather their indices) at a specific [pad::position::Position] on the [crate::board::Board].
+/// A [`Cell`] contains the possible tiles (or rather their indices) at a specific [`pad::position::Position`] on the [`crate::board::Board`].
 pub trait Cell {
-    /// Create a new [Cell] from the amount of tiles the wfc will use the the index of the bucket queue bucket the cell is currently in.
+    /// Create a new [`Cell`] from the amount of tiles the wfc will use the the index of the bucket queue bucket the cell is currently in.
     fn new(
         num_tiles: usize,
         bucket_index: usize,
     ) -> Self;
 
-    /// Return the entropy of this [Cell], which is the amount of possible tiles.
+    /// Return the entropy of this [`Cell`], which is the amount of possible tiles.
     fn entropy(&self) -> u8;
 
-    /// Return the current [PossibleIndices] of the [Cell]. This basically tells
+    /// Return the current [`PossibleIndices`] of the [`Cell`]. This basically tells
     /// which tiles are still possible.
     fn get_possible_indices(&self) -> PossibleIndices<'_>;
 
-    /// Collapse the [Cell] to the given tile index.
+    /// Collapse the [`Cell`] to the given tile index.
     fn collapse(
         &mut self,
         index: u8,
     );
 
-    /// Update the [Cell] by setting its possible indices to the given ones.
+    /// Update the [`Cell`] by setting its possible indices to the given ones.
     fn set_indices(
         &mut self,
         indices: impl IntoIterator<Item = u8>,
     );
 
-    /// Return the last possible index in this [Cell], assuming it is collapsed.
+    /// Return the last possible index in this [`Cell`], assuming it is collapsed.
     fn get_collapsed_index(&self) -> u8;
 
-    /// Returs true if this [Cell] is collapsed, or else false.
+    /// Returs true if this [`Cell`] is collapsed, or else false.
     fn is_collapsed(&self) -> bool;
 
     /// Returns the index in the bucket of the bucket queue the cell is currently in.
@@ -46,7 +46,7 @@ pub trait Cell {
 /// Holds the possible tile indices which are possible by a specific position, known by the board.
 /// The const generic C represents the maximum amount of tiles possible and therefore the capacity of
 /// the cell.
-/// This is the fastest [Cell] implementation, but also the most limited, as the amount of tiles must be
+/// This is the fastest [`Cell`] implementation, but also the most limited, as the amount of tiles must be
 /// known at compile time
 #[derive(Clone, Copy)]
 pub struct ConstCell<const C: usize> {
@@ -131,8 +131,8 @@ impl<const C: usize> Cell for ConstCell<C> {
     }
 }
 
-/// A [Cell] which uses a [BitArray] internally to store its possible indices. As [u128]
-/// is used as the base, this [Cell] supports up to 128 different tiles.
+/// A [`Cell`] which uses a [`BitArray`] internally to store its possible indices. As [`u128`]
+/// is used as the base, this [`Cell`] supports up to 128 different tiles.
 #[derive(Clone, Copy)]
 pub struct BitCell {
     pub entropy: u8,
@@ -217,8 +217,8 @@ impl Cell for BitCell {
     }
 }
 
-/// A [Cell] which supports an arbitrary amount of tiles. This is the most flexible implementation
-/// of [Cell]
+/// A [`Cell`] which supports an arbitrary amount of tiles. This is the most flexible implementation
+/// of [`Cell`]
 pub struct DynCell {
     indices: Vec<u8>,
     bucket_index: usize,

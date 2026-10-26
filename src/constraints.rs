@@ -115,7 +115,7 @@ impl<T> Constraints<T> {
     }
 }
 
-/// A [Constraint] which defines what tiles can be neighboured to each other.
+/// A [`Constraint`] which defines what tiles can be neighboured to each other.
 pub struct PossibleNeighbours {
     allowed_neighbours: Vec<(u8, u8)>,
 }
