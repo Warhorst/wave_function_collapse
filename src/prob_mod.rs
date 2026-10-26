@@ -1,7 +1,3 @@
-// TODO instead of setting my weights using an iterator where I need to know the index in the
-// tiles, I could use an initial probability modifier to set the weights initially, and
-// then some to update per cell
-
 use pad::position::Position;
 
 /// Modifies the probability of tiles. The modifiers are applied when a tile to
@@ -10,7 +6,7 @@ pub trait ProbabilityModifier<T> {
     /// Modifiy the tile probabilities for the given position.
     ///
     /// * `position`: The [`Position`] which tile probabilities will be modified
-    /// * `position`: The weights to modify. These might be the base weigths or, when working with multiple modifiers, the modified weights of a previous modifier.
+    /// * `weights`: The weights to modify. These might be the base weigths or, when working with multiple modifiers, the modified weights of a previous modifier.
     /// * `context`: The [`ProbModContext`] which provides additional data that might be relevant for the modication.
     fn modify_probability(
         &self,
@@ -23,13 +19,13 @@ pub trait ProbabilityModifier<T> {
 /// Context for a [`ProbabilityModifier`] which contains relevant, read-only data
 /// for the modification.
 pub struct ProbModContext<'a, T> {
-    /// The width of the board
+    /// The width of the [`crate::board::Board`] (in tiles).
     pub width: usize,
-    /// The height of the board
+    /// The height of the [`crate::board::Board`] (in tiles).
     pub height: usize,
-    /// All existing tiles in the WFC. The index of the tile is the same as the index to the weight of the tile.
+    /// All existing tiles in the [`crate::Wfc`]. The index of the tile is the same as the index to the weight of the tile.
     pub tiles: &'a [T],
-    /// All currently collapsed positions in the WFC
+    /// All currently collapsed positions in the [`crate::Wfc`].
     pub collapsed_positions: &'a [(Position, T)],
 }
 

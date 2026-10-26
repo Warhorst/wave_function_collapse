@@ -54,6 +54,8 @@ impl<C: Cell> Board<C> {
         position: Position,
         filtered_tiles: &FilteredTiles,
     ) {
+        // TODO error when reducing entropy to 0
+    
         let cell = self.get_cell_mut(position);
         cell.set_indices(filtered_tiles.get_possible_tile_indices());
     }
