@@ -2,11 +2,6 @@ use pad::position::Position;
 
 use crate::cell::PossibleIndices;
 
-// TODO Things I want as possible constraints:
-//  - The classic color constraint
-//  - Simple neighbourhood, just like currently
-//  - Directional neighbour restrictions, like the original coast example
-
 /// A Constraint modifies the tile options of a [`crate::cell::Cell`], based on its currently
 /// possible tiles and its neighbours.
 pub trait Constraint<T> {

@@ -345,10 +345,6 @@ impl StatefulWidget for &WfcMap {
     }
 }
 
-// TODO to fully use the elm architecture, make the settings a stateful widget and introduce the settings state
-//  Or maybe don't, as the settings would not have any fields left? Maybe thats alright, as a widget should only
-//  have other widgets as fields
-
 struct SettingsPanel {
     selected: bool,
     table_state: TableState,
