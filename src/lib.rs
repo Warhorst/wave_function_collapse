@@ -1,5 +1,5 @@
 use crate::{
-    board::Board,
+    board::{Board, BoardError},
     cell::{Cell, PossibleIndices},
     constraints::{Constraint, Constraints},
     prob_mod::{ProbabilityModifier, ProbabilityModifiers},
@@ -7,12 +7,8 @@ use crate::{
     tile_filter::{TileFilter, TileFilters},
 };
 use pad::{p, position::Position};
-use std::{
-    error::Error,
-    fmt::{Display, Formatter},
-    hash::Hash,
-    marker::PhantomData,
-};
+use std::{hash::Hash, marker::PhantomData};
+use thiserror::Error;
 
 mod board;
 pub mod cell;
@@ -210,7 +206,7 @@ where
                 self.tile_filters
                     .filter_tiles(pos, self.width, self.height, &self.tiles);
 
-            board.filter_tiles(pos, filtered_tiles);
+            board.filter_tiles(pos, filtered_tiles)?;
         }
 
         Ok(Wfc::new(
@@ -226,31 +222,11 @@ where
 
 /// An error for the wave function collapse, which occurs due to configuration errors
 /// or runtime errors.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum WfcError {
     /// A different amount of weights was set in the WFC than expected.
+    #[error("{expected} weights were expected, but {was} were provided!")]
     InvalidWeightAmount { expected: usize, was: usize },
-    /// A cell has zero entropy after a propagation, which means no tile
-    /// can be picked for it
-    CellHasZeroEntropy(Position),
-}
-
-impl Error for WfcError {}
-
-impl Display for WfcError {
-    fn fmt(
-        &self,
-        f: &mut Formatter<'_>,
-    ) -> std::fmt::Result {
-        match self {
-            WfcError::InvalidWeightAmount { expected, was } => write!(
-                f,
-                "{expected} weights were expected, but {was} were provided!"
-            ),
-            WfcError::CellHasZeroEntropy(pos) => write!(
-                f,
-                "The position {pos:?} has zero entropy and cannot be collapsed!"
-            ),
-        }
-    }
+    #[error("{0}")]
+    BoardError(#[from] BoardError),
 }

@@ -1,10 +1,10 @@
+use crate::cell::Cell;
 use crate::constraints::Constraints;
 use crate::tile_filter::FilteredTiles;
-use crate::{WfcError, cell::Cell};
 use pad::p;
 use pad::position::Position;
 use std::collections::VecDeque;
-// todo Maybe try using a set of not collapsed positions
+use thiserror::Error;
 
 /// Contains the current state of the WFC with all the cells at their respective positions.
 /// The WFC is done if all positions on the board are collapsed.
@@ -53,11 +53,15 @@ impl<C: Cell> Board<C> {
         &mut self,
         position: Position,
         filtered_tiles: &FilteredTiles,
-    ) {
-        // TODO error when reducing entropy to 0
-    
+    ) -> Result<(), BoardError> {
         let cell = self.get_cell_mut(position);
         cell.set_indices(filtered_tiles.get_possible_tile_indices());
+
+        if cell.entropy() == 0 {
+            return Err(BoardError::ZeroEntropyAfterFilter(position));
+        }
+
+        Ok(())
     }
 
     /// tells if the full board is collapsed
@@ -72,7 +76,7 @@ impl<C: Cell> Board<C> {
         index: u8,
         constraints: &mut Constraints<T>,
         all_tiles: &[T],
-    ) -> Result<&[(Position, u8)], WfcError> {
+    ) -> Result<&[(Position, u8)], BoardError> {
         self.collapsed_positions.clear();
         self.collapsed_positions.push((position, index));
 
@@ -100,7 +104,7 @@ impl<C: Cell> Board<C> {
         collapsed_position: Position,
         constraints: &mut Constraints<T>,
         all_tiles: &[T],
-    ) -> Result<&[(Position, u8)], WfcError> {
+    ) -> Result<&[(Position, u8)], BoardError> {
         // init the propagation queue with the just collapsed position
         self.propagation_queue.push_back(collapsed_position);
 
@@ -138,7 +142,7 @@ impl<C: Cell> Board<C> {
                 // no tile which fulfills all constraints. This is an error
                 // and is returned to the caller
                 if new_indices.is_empty() {
-                    return Err(WfcError::CellHasZeroEntropy(pos));
+                    return Err(BoardError::ZeroEntropyAfterPropagate(pos));
                 }
 
                 // If the indices changed (which can only mean: there are
@@ -333,4 +337,15 @@ impl BucketQueue {
             })
             .expect("The bucket queue must not be empty")
     }
+}
+
+#[derive(Debug, Error)]
+pub enum BoardError {
+    /// The entropy of a [`Cell`] was zero after applying [`crate::tile_filter::TileFilter`]s.
+    #[error("Position {0:?} had an entropy of 0 after applying the tile filters.")]
+    ZeroEntropyAfterFilter(Position),
+    /// A cell has zero entropy after a propagation, which means no tile
+    /// can be picked for it
+    #[error("The position {0:?} has zero entropy and cannot be collapsed!")]
+    ZeroEntropyAfterPropagate(Position),
 }
