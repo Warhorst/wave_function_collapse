@@ -9,7 +9,7 @@ use crate::{
     tile_filter::{TileFilter, TileFilters},
 };
 use pad::{p, position::Position};
-use std::{hash::Hash, marker::PhantomData};
+use std::{fmt::Debug, hash::Hash, marker::PhantomData};
 use thiserror::Error;
 
 pub mod board;
@@ -119,6 +119,12 @@ where
     ) -> u8 {
         random.choose_weighted(tile_weights, possible_indices)
     }
+
+    /// Return the [`Debug`] representation of the seed used for this [`Wfc`].
+    /// Might be usable for debugging.
+    pub fn seed(&self) -> impl Debug {
+        self.random.seed()   
+    }
 }
 
 /// The builder for a [`Wfc`].
@@ -141,7 +147,7 @@ where
     /// Set a custom seed for the [`Wfc`]
     pub fn with_seed(
         mut self,
-        seed: impl Hash,
+        seed: impl Hash + Debug + 'static,
     ) -> Self {
         self.random = Random::from_seed(seed);
         self
