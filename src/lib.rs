@@ -203,12 +203,14 @@ where
 
         let mut board = Board::<C>::new(self.width, self.height, self.tiles.len());
 
-        for pos in p!(0, 0).iter_to(p!(self.width - 1, self.height - 1)) {
-            let filtered_tiles =
-                self.tile_filters
-                    .filter_tiles(pos, self.width, self.height, &self.tiles);
+        if !self.tile_filters.is_empty() {
+            for pos in p!(0, 0).iter_to(p!(self.width - 1, self.height - 1)) {
+                let filtered_tiles =
+                    self.tile_filters
+                        .filter_tiles(pos, self.width, self.height, &self.tiles);
 
-            board.filter_tiles(pos, filtered_tiles)?;
+                board.filter_tiles(pos, filtered_tiles)?;
+            }
         }
 
         Ok(Wfc::new(

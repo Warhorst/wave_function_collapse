@@ -81,6 +81,10 @@ impl<T> TileFilters<T> {
 
         &self.filtered_tiles
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.tile_filters.is_empty()
+    }
 }
 
 /// The filtered tiles for one specific [`Position`] on the [`crate::board::Board`].

@@ -55,11 +55,14 @@ impl<C: Cell> Board<C> {
         filtered_tiles: &FilteredTiles,
     ) -> Result<(), BoardError> {
         let cell = self.get_cell_mut(position);
+        let entropy = cell.entropy();
         cell.set_indices(filtered_tiles.get_possible_tile_indices());
 
         if cell.entropy() == 0 {
             return Err(BoardError::ZeroEntropyAfterFilter(position));
         }
+
+        self.update_bucket_queue(position, entropy);
 
         Ok(())
     }
@@ -84,14 +87,7 @@ impl<C: Cell> Board<C> {
         let entropy = cell.entropy();
         cell.collapse(index);
 
-        let cell = self.get_cell(position);
-        if let Some((pos, index)) = self
-            .bucket_queue
-            .remove_cell(entropy as usize, cell.get_bucket_index())
-        {
-            let cell = self.get_cell_mut(pos);
-            cell.set_bucket_index(index);
-        }
+        self.update_bucket_queue(position, entropy);
 
         self.propagate(position, constraints, all_tiles)
     }
@@ -165,37 +161,44 @@ impl<C: Cell> Board<C> {
                     self.collapsed_positions.push((pos, collapsed_index));
                 }
 
-                let cell = self.get_cell(pos);
-
-                // Update the cell position in the bucket list
-                if cell.is_collapsed() {
-                    if let Some((pos, index)) = self
-                        .bucket_queue
-                        .remove_cell(current_entropy as usize, cell.get_bucket_index())
-                    {
-                        let cell = self.get_cell_mut(pos);
-                        cell.set_bucket_index(index);
-                    }
-                } else {
-                    let (new_bucket_index, moved_cell_opt) = self.bucket_queue.move_cell(
-                        current_entropy as usize,
-                        cell.get_bucket_index(),
-                        cell.entropy() as usize,
-                        pos,
-                    );
-
-                    let cell = self.get_cell_mut(pos);
-                    cell.set_bucket_index(new_bucket_index);
-
-                    if let Some((pos, index)) = moved_cell_opt {
-                        let cell = self.get_cell_mut(pos);
-                        cell.set_bucket_index(index);
-                    }
-                }
+                self.update_bucket_queue(pos, current_entropy);
             }
         }
 
         Ok(&self.collapsed_positions)
+    }
+
+    fn update_bucket_queue(
+        &mut self,
+        pos: Position,
+        previous_entropy: u8,
+    ) {
+        let cell = self.get_cell(pos);
+
+        if cell.is_collapsed() {
+            if let Some((pos, index)) = self
+                .bucket_queue
+                .remove_cell(previous_entropy as usize, cell.get_bucket_index())
+            {
+                let cell = self.get_cell_mut(pos);
+                cell.set_bucket_index(index);
+            }
+        } else {
+            let (new_bucket_index, moved_cell_opt) = self.bucket_queue.move_cell(
+                previous_entropy as usize,
+                cell.get_bucket_index(),
+                cell.entropy() as usize,
+                pos,
+            );
+
+            let cell = self.get_cell_mut(pos);
+            cell.set_bucket_index(new_bucket_index);
+
+            if let Some((pos, index)) = moved_cell_opt {
+                let cell = self.get_cell_mut(pos);
+                cell.set_bucket_index(index);
+            }
+        }
     }
 
     fn pos_in_bounds(
