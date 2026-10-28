@@ -287,6 +287,7 @@ impl Cell for DynCell {
     }
 }
 
+/// The currently possible indices of a [`Cell`].
 #[derive(Clone, Copy)]
 pub enum PossibleIndices<'a> {
     Array { indices: &'a [u8], entropy: u8 },

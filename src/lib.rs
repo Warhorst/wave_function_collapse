@@ -112,18 +112,111 @@ where
         Ok(self.collapsed_positions)
     }
 
+    /// Collapse the given [`Position`] and propagate the changes.
+    ///
+    /// Might return an error if the position is already collapsed.
+    pub fn collapse_position(
+        &mut self,
+        position: Position,
+    ) -> Result<Vec<(Position, T)>, WfcError> {
+        let cell = self.board.get_cell(position);
+
+        if cell.is_collapsed() {
+            return Err(WfcError::PositionAlreadyCollapsed(position));
+        }
+
+        let modified_weights = self.probability_modifiers.modify_probability(
+            position,
+            &self.weights,
+            self.board.width,
+            self.board.height,
+            &self.tiles,
+            &self.collapsed_positions,
+        );
+
+        let possible_indices = cell.get_possible_indices();
+        let weights = possible_indices
+            .iter()
+            .map(|i| modified_weights[i as usize]);
+        let index = Self::choose_next_index(&mut self.random, possible_indices, weights);
+
+        let collapsed_positions =
+            self.board
+                .collapse_position(position, index, &mut self.constraints, &self.tiles)?;
+
+        collapsed_positions.iter().for_each(|(pos, i)| {
+            self.collapsed_positions
+                .push((*pos, self.tiles[*i as usize].clone()))
+        });
+
+        Ok(collapsed_positions
+            .iter()
+            .map(|(pos, i)| (*pos, self.tiles[*i as usize].clone()))
+            .collect())
+    }
+
+    /// Collapse the given [`Position`] with the given tile index.
+    ///
+    /// Might return an error if the position is already collapsed or the given
+    /// index is not possible for this position.
+    pub fn collapse_position_and_tile(
+        &mut self,
+        position: Position,
+        tile_index: usize,
+    ) -> Result<Vec<(Position, T)>, WfcError> {
+        let cell = self.board.get_cell(position);
+
+        if cell.is_collapsed() {
+            return Err(WfcError::PositionAlreadyCollapsed(position));
+        }
+
+        let valid_index = cell
+            .get_possible_indices()
+            .iter()
+            .any(|i| i as usize == tile_index);
+
+        if !valid_index {
+            return Err(WfcError::InvalidTileIndex(tile_index, position));
+        }
+
+        let collapsed_positions = self.board.collapse_position(
+            position,
+            tile_index as u8,
+            &mut self.constraints,
+            &self.tiles,
+        )?;
+
+        collapsed_positions.iter().for_each(|(pos, i)| {
+            self.collapsed_positions
+                .push((*pos, self.tiles[*i as usize].clone()))
+        });
+
+        Ok(collapsed_positions
+            .iter()
+            .map(|(pos, i)| (*pos, self.tiles[*i as usize].clone()))
+            .collect())
+    }
+
+    /// Return the [`Debug`] representation of the seed used for this [`Wfc`].
+    /// Might be usable for debugging.
+    pub fn seed(&self) -> impl Debug {
+        self.random.seed()
+    }
+
+    /// Return the possible indices of the cell at the given [`Position`].
+    pub fn get_possible_indices(
+        &self,
+        position: Position,
+    ) -> PossibleIndices<'_> {
+        self.board.get_cell(position).get_possible_indices()
+    }
+
     fn choose_next_index(
         random: &mut Random,
         possible_indices: PossibleIndices,
         tile_weights: impl IntoIterator<Item = f32>,
     ) -> u8 {
         random.choose_weighted(tile_weights, possible_indices)
-    }
-
-    /// Return the [`Debug`] representation of the seed used for this [`Wfc`].
-    /// Might be usable for debugging.
-    pub fn seed(&self) -> impl Debug {
-        self.random.seed()   
     }
 }
 
@@ -237,6 +330,10 @@ pub enum WfcError {
     /// A different amount of weights was set in the WFC than expected.
     #[error("{expected} weights were expected, but {was} were provided!")]
     InvalidWeightAmount { expected: usize, was: usize },
+    #[error("The position {0:?} is already collapsed.")]
+    PositionAlreadyCollapsed(Position),
+    #[error("The index {0} is not a valid choice for position {1:?}")]
+    InvalidTileIndex(usize, Position),
     #[error("{0}")]
     BoardError(#[from] BoardError),
 }
