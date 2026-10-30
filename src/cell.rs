@@ -27,8 +27,10 @@ pub trait Cell {
         indices: impl IntoIterator<Item = u8>,
     );
 
-    /// Return the last possible index in this [`Cell`], assuming it is collapsed.
-    fn get_collapsed_index(&self) -> u8;
+    /// Return the last possible index in this [`Cell`].
+    ///
+    /// Returns [`Option::None`] if this cell does not have an entropy of 1.
+    fn get_collapsed_index(&self) -> Option<u8>;
 
     /// Returs true if this [`Cell`] is collapsed, or else false.
     fn is_collapsed(&self) -> bool;
@@ -111,8 +113,12 @@ impl<const C: usize> Cell for ConstCell<C> {
         self.entropy = entropy
     }
 
-    fn get_collapsed_index(&self) -> u8 {
-        self.tile_indices[0]
+    fn get_collapsed_index(&self) -> Option<u8> {
+        if !self.is_collapsed() {
+            return None;
+        }
+
+        self.tile_indices.first().copied()
     }
 
     fn is_collapsed(&self) -> bool {
@@ -197,8 +203,12 @@ impl Cell for BitCell {
         self.tile_indices = tile_indices
     }
 
-    fn get_collapsed_index(&self) -> u8 {
-        self.tile_indices.ones().next().unwrap()
+    fn get_collapsed_index(&self) -> Option<u8> {
+        if !self.is_collapsed() {
+            return None;
+        }
+
+        self.tile_indices.ones().next()
     }
 
     fn is_collapsed(&self) -> bool {
@@ -267,8 +277,12 @@ impl Cell for DynCell {
             .for_each(|index| self.indices.push(index));
     }
 
-    fn get_collapsed_index(&self) -> u8 {
-        self.indices[0]
+    fn get_collapsed_index(&self) -> Option<u8> {
+        if !self.is_collapsed() {
+            return None;
+        }
+
+        self.indices.first().copied()
     }
 
     fn is_collapsed(&self) -> bool {
@@ -376,9 +390,107 @@ impl<'a> Iterator for PossibleIndicesIter<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::cell::{BitCell, Cell, ConstCell, DynCell, PossibleIndices};
     use bitarray::BitArray;
 
-    use crate::cell::PossibleIndices;
+    #[test]
+    fn collapse_works() {
+        collapse_works_(ConstCell::<3>::new(3, 0));
+        collapse_works_(BitCell::new(3, 0));
+        collapse_works_(DynCell::new(3, 0));
+    }
+
+    fn collapse_works_(mut cell: impl Cell) {
+        assert_eq!(cell_indices(&cell), vec![0, 1, 2]);
+
+        cell.collapse(1);
+
+        assert_eq!(cell_indices(&cell), vec![1]);
+    }
+
+    #[test]
+    fn set_indices_works() {
+        set_indices_works_(ConstCell::<3>::new(3, 0));
+        set_indices_works_(BitCell::new(3, 0));
+        set_indices_works_(DynCell::new(3, 0));
+    }
+
+    fn set_indices_works_(mut cell: impl Cell) {
+        assert_eq!(cell_indices(&cell), vec![0, 1, 2]);
+
+        cell.set_indices([1, 2]);
+
+        assert_eq!(cell_indices(&cell), vec![1, 2]);
+
+        cell.set_indices([]);
+
+        // A cell with empty indices must be possible
+        assert_eq!(cell_indices(&cell), vec![]);
+    }
+
+    #[test]
+    fn get_collapse_index_works() {
+        get_collapse_index_works_(ConstCell::<3>::new(3, 0));
+        get_collapse_index_works_(BitCell::new(3, 0));
+        get_collapse_index_works_(DynCell::new(3, 0));
+    }
+
+    fn get_collapse_index_works_(mut cell: impl Cell) {
+        assert_eq!(cell_indices(&cell), vec![0, 1, 2]);
+
+        cell.collapse(0);
+
+        assert_eq!(cell.get_collapsed_index(), Some(0));
+
+        cell.set_indices([1, 2]);
+
+        assert_eq!(cell.get_collapsed_index(), None);
+
+        cell.set_indices([]);
+
+        assert_eq!(cell.get_collapsed_index(), None);
+    }
+
+    #[test]
+    fn is_collapsed_works() {
+        is_collapsed_works_(ConstCell::<3>::new(3, 0));
+        is_collapsed_works_(BitCell::new(3, 0));
+        is_collapsed_works_(DynCell::new(3, 0));
+    }
+
+    fn is_collapsed_works_(mut cell: impl Cell) {
+        assert_eq!(cell_indices(&cell), vec![0, 1, 2]);
+
+        assert!(!cell.is_collapsed());
+
+        cell.set_indices([1, 2]);
+
+        assert!(!cell.is_collapsed());
+
+        cell.collapse(0);
+
+        assert!(cell.is_collapsed());
+
+        cell.set_indices([]);
+
+        // A cell with zero entropy is not collapsed, but an error state
+        assert!(!cell.is_collapsed());
+    }
+
+    #[test]
+    fn bucket_index_works() {
+        bucket_index_works_(ConstCell::<3>::new(3, 0));
+        bucket_index_works_(BitCell::new(3, 0));
+        bucket_index_works_(DynCell::new(3, 0));
+    }
+
+    fn bucket_index_works_(mut cell: impl Cell) {
+        assert_eq!(0, cell.get_bucket_index());
+
+        cell.set_bucket_index(1);
+
+        assert_eq!(1, cell.get_bucket_index());
+    }
 
     #[test]
     fn possible_indices_iter_works() {
@@ -394,5 +506,9 @@ mod tests {
         let bitarray_indices = PossibleIndices::from_bitarray(bitarray, 3);
         let iter = bitarray_indices.iter();
         assert_eq!(iter.collect::<Vec<_>>(), vec![2, 4, 6])
+    }
+
+    fn cell_indices(cell: &impl Cell) -> Vec<u8> {
+        cell.get_possible_indices().iter().collect()
     }
 }

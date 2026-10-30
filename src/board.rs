@@ -157,7 +157,9 @@ impl<C: Cell> Board<C> {
 
                 // Add the collapsed cell to the vec of collapsed cells
                 if cell_mut.is_collapsed() {
-                    let collapsed_index = cell_mut.get_collapsed_index();
+                    let collapsed_index = cell_mut
+                        .get_collapsed_index()
+                        .expect("The cell is collapsed, so the collapsed index must be present");
                     self.collapsed_positions.push((pos, collapsed_index));
                 }
 
