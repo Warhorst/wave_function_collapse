@@ -345,6 +345,12 @@ impl BucketQueue {
             })
             .expect("The bucket queue must not be empty")
     }
+
+    /// Return the amount of items in this bucket queue
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.buckets.iter().map(|b| b.len()).sum()
+    }
 }
 
 #[derive(Debug, Error)]
@@ -356,4 +362,54 @@ pub enum BoardError {
     /// can be picked for it
     #[error("The position {0:?} has zero entropy and cannot be collapsed!")]
     ZeroEntropyAfterPropagate(Position),
+}
+
+#[cfg(test)]
+mod tests {
+    mod bucket_queue {
+        use pad::p;
+
+        use crate::board::BucketQueue;
+
+        #[test]
+        fn empty_queue_works() {
+            let _ = BucketQueue::initialize([], 3);
+        }
+
+        #[test]
+        fn is_empty_works() {
+            let mut queue = BucketQueue::initialize([p!(0, 0)], 3);
+
+            assert!(!queue.is_empty());
+
+            queue.remove_cell(3, 0);
+
+            assert!(queue.is_empty());
+        }
+
+        #[test]
+        fn remove_cell_works() {
+            let mut queue = BucketQueue::initialize([p!(0, 0), p!(1, 0), p!(2, 0)], 3);
+
+            // Remove the first cell. It should swap positions with the last cell, moving it in the bucket
+            let moved = queue.remove_cell(3, 0);
+            assert_eq!(queue.len(), 2);
+            assert_eq!(moved, Some((p!(2, 0), 0)));
+
+            // The last cell was moved. This one does not swap position with another cell
+            let moved = queue.remove_cell(3, 1);
+            assert_eq!(queue.len(), 1);
+            assert_eq!(moved, None);
+
+            // Empty the queue
+            let moved = queue.remove_cell(3, 0);
+            assert!(queue.is_empty());
+            assert_eq!(moved, None);
+
+            // TODO this case should not panic. It should return an error
+            let moved = queue.remove_cell(3, 0);
+            assert!(queue.is_empty());
+            assert_eq!(moved, None);
+        }
+    }
 }
