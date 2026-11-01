@@ -181,6 +181,7 @@ impl<C: Cell> Board<C> {
             if let Some((pos, index)) = self
                 .bucket_queue
                 .remove_cell(previous_entropy as usize, cell.get_bucket_index())
+                .expect("The bucket queue should contain the entropy and index to remove")
             {
                 let cell = self.get_cell_mut(pos);
                 cell.set_bucket_index(index);
@@ -308,13 +309,27 @@ impl BucketQueue {
     /// Remove the cell at the given entropy and bucket_index.
     ///
     /// This returns the new bucket index of the cell. This also might return
-    /// the position and new bucket index of another cell that was also moved in the process
+    /// the position and new bucket index of another cell that was also moved in the process.
+    ///
+    /// Returns an error when no bucket for the given entropy exists or the bucket index is out
+    /// of bounds.
     fn remove_cell(
         &mut self,
         entropy: usize,
         bucket_index: usize,
-    ) -> Option<(Position, usize)> {
-        let bucket = &mut self.buckets[entropy - 1];
+    ) -> Result<Option<(Position, usize)>, BucketQueueError> {
+        let bucket = if let Some(bucket) = self.buckets.get_mut(entropy - 1) {
+            bucket
+        } else {
+            return Err(BucketQueueError::InvalidEntropy { entropy });
+        };
+
+        if !(bucket_index < bucket.len()) {
+            return Err(BucketQueueError::InvalidBucketIndex {
+                entropy,
+                bucket_index,
+            });
+        }
 
         let last_index = bucket.len() - 1;
         // If the cell was the last entry in the bucket, nothing was moved due to the swap remove
@@ -324,7 +339,7 @@ impl BucketQueue {
         self.num_cells -= 1;
         self.update_min_entropy();
 
-        moved_index.map(|i| (self.buckets[entropy - 1][i], i))
+        Ok(moved_index.map(|i| (self.buckets[entropy - 1][i], i)))
     }
 
     fn update_min_entropy(&mut self) {
@@ -353,6 +368,14 @@ impl BucketQueue {
     }
 }
 
+#[derive(Debug, Eq, Error, PartialEq)]
+enum BucketQueueError {
+    #[error("No bucket exists for entropy '{entropy}'.")]
+    InvalidEntropy { entropy: usize },
+    #[error("Bucket at entropy '{entropy}' has no cell at index '{bucket_index}'")]
+    InvalidBucketIndex { entropy: usize, bucket_index: usize },
+}
+
 #[derive(Debug, Error)]
 pub enum BoardError {
     /// The entropy of a [`Cell`] was zero after applying [`crate::tile_filter::TileFilter`]s.
@@ -369,7 +392,7 @@ mod tests {
     mod bucket_queue {
         use pad::p;
 
-        use crate::board::BucketQueue;
+        use crate::board::{BucketQueue, BucketQueueError};
 
         #[test]
         fn empty_queue_works() {
@@ -382,7 +405,7 @@ mod tests {
 
             assert!(!queue.is_empty());
 
-            queue.remove_cell(3, 0);
+            queue.remove_cell(3, 0).unwrap();
 
             assert!(queue.is_empty());
         }
@@ -394,22 +417,38 @@ mod tests {
             // Remove the first cell. It should swap positions with the last cell, moving it in the bucket
             let moved = queue.remove_cell(3, 0);
             assert_eq!(queue.len(), 2);
-            assert_eq!(moved, Some((p!(2, 0), 0)));
+            assert_eq!(moved, Ok(Some((p!(2, 0), 0))));
 
             // The last cell was moved. This one does not swap position with another cell
             let moved = queue.remove_cell(3, 1);
             assert_eq!(queue.len(), 1);
-            assert_eq!(moved, None);
+            assert_eq!(moved, Ok(None));
 
             // Empty the queue
             let moved = queue.remove_cell(3, 0);
             assert!(queue.is_empty());
-            assert_eq!(moved, None);
+            assert_eq!(moved, Ok(None));
 
-            // TODO this case should not panic. It should return an error
+            // Access a no longer existing index
             let moved = queue.remove_cell(3, 0);
             assert!(queue.is_empty());
-            assert_eq!(moved, None);
+            assert_eq!(
+                moved,
+                Err(BucketQueueError::InvalidBucketIndex {
+                    entropy: 3,
+                    bucket_index: 0
+                })
+            );
+
+            // Access a not existing entropy aka a non existing bucket
+            let moved = queue.remove_cell(4, 0);
+            assert!(queue.is_empty());
+            assert_eq!(moved, Err(BucketQueueError::InvalidEntropy { entropy: 4 }));
         }
+    }
+
+    #[test]
+    fn move_cell_works() {
+        // TODO add also error handling for the move cell method
     }
 }
