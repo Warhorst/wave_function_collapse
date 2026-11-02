@@ -399,7 +399,7 @@ enum BucketQueueError {
     InvalidBucketIndex { entropy: usize, bucket_index: usize },
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Eq, PartialEq)]
 pub enum BoardError {
     /// The entropy of a [`Cell`] was zero after applying [`crate::tile_filter::TileFilter`]s.
     #[error("Position {0:?} had an entropy of 0 after applying the tile filters.")]
@@ -412,6 +412,40 @@ pub enum BoardError {
 
 #[cfg(test)]
 mod tests {
+    use pad::p;
+
+    use crate::{
+        board::{Board, BoardError},
+        cell::{Cell, DynCell},
+        tile_filter::FilteredTiles,
+    };
+
+    #[test]
+    fn filter_tiles_works() {
+        let mut board = Board::<DynCell>::new(10, 10, 3);
+
+        let filtered_tiles = FilteredTiles::with_filtered(vec![true, false, false]);
+
+        let result = board.filter_tiles(p!(0, 0), &filtered_tiles);
+
+        assert_eq!(result, Ok(()));
+
+        let cell = board.get_cell(p!(0, 0));
+
+        assert_eq!(cell.entropy(), 1);
+    }
+
+    #[test]
+    fn filter_tiles_all_filtered_fails() {
+        let mut board = Board::<DynCell>::new(10, 10, 3);
+
+        let filtered_tiles = FilteredTiles::with_filtered(vec![false; 3]);
+
+        let result = board.filter_tiles(p!(0, 0), &filtered_tiles);
+
+        assert_eq!(result, Err(BoardError::ZeroEntropyAfterFilter(p!(0, 0))));
+    }
+
     mod bucket_queue {
         use pad::p;
 

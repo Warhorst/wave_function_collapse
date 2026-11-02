@@ -105,7 +105,7 @@ impl FilteredTiles {
         self.tiles.iter_mut().for_each(|b| *b = true);
     }
 
-    pub (crate) fn get_possible_tile_indices(&self) -> impl Iterator<Item = u8> {
+    pub(crate) fn get_possible_tile_indices(&self) -> impl Iterator<Item = u8> {
         self.tiles
             .iter()
             .copied()
@@ -120,6 +120,13 @@ impl FilteredTiles {
     ) {
         if let Some(b) = self.tiles.get_mut(i) {
             *b = false
+        }
+    }
+
+    #[cfg(test)]
+    pub fn with_filtered(tiles: impl IntoIterator<Item = bool>) -> Self {
+        FilteredTiles {
+            tiles: tiles.into_iter().collect(),
         }
     }
 }
