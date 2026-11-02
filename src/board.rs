@@ -187,12 +187,14 @@ impl<C: Cell> Board<C> {
                 cell.set_bucket_index(index);
             }
         } else {
-            let (new_bucket_index, moved_cell_opt) = self.bucket_queue.move_cell(
-                previous_entropy as usize,
-                cell.get_bucket_index(),
-                cell.entropy() as usize,
-                pos,
-            );
+            let (new_bucket_index, moved_cell_opt) = self
+                .bucket_queue
+                .move_cell(
+                    previous_entropy as usize,
+                    cell.get_bucket_index(),
+                    cell.entropy() as usize,
+                )
+                .expect("The bucket queue should contain the entropy and index to move");
 
             let cell = self.get_cell_mut(pos);
             cell.set_bucket_index(new_bucket_index);
@@ -281,21 +283,42 @@ impl BucketQueue {
     /// Move a cell at old_entropy and bucket_index to the new entropy.
     ///
     /// This returns the new bucket index of the cell. This also might return
-    /// the position and new bucket index of another cell that was also moved in the process
+    /// the position and new bucket index of another cell that was also moved in the process.
+    ///
+    /// Returns an error when no bucket for the given entropy exists or the bucket index is out
+    /// of bounds.
     fn move_cell(
         &mut self,
         old_entropy: usize,
         bucket_index: usize,
         new_entropy: usize,
-        position: Position,
-    ) -> (usize, Option<(Position, usize)>) {
-        let bucket = &mut self.buckets[old_entropy - 1];
+    ) -> Result<(usize, Option<(Position, usize)>), BucketQueueError> {
+        if !(old_entropy - 1 < self.buckets.len()) {
+            return Err(BucketQueueError::InvalidEntropy {
+                entropy: old_entropy,
+            });
+        }
 
-        let last_index = bucket.len() - 1;
+        if !(new_entropy - 1 < self.buckets.len()) {
+            return Err(BucketQueueError::InvalidEntropy {
+                entropy: new_entropy,
+            });
+        }
+
+        let old_bucket = &mut self.buckets[old_entropy - 1];
+
+        if !(bucket_index < old_bucket.len()) {
+            return Err(BucketQueueError::InvalidBucketIndex {
+                entropy: old_entropy,
+                bucket_index,
+            });
+        }
+
+        let last_index = old_bucket.len() - 1;
         // If the cell was the last entry in the bucket, nothing was moved due to the swap remove
         let moved_index = (bucket_index != last_index).then_some(bucket_index);
 
-        bucket.swap_remove(bucket_index);
+        let position = old_bucket.swap_remove(bucket_index);
 
         let moved_opt = moved_index.map(|i| (self.buckets[old_entropy - 1][i], i));
         self.buckets[new_entropy - 1].push(position);
@@ -303,7 +326,7 @@ impl BucketQueue {
         self.update_min_entropy();
 
         // new bucket index, position and new bucket index of possibly moved cell
-        (self.buckets[new_entropy - 1].len() - 1, moved_opt)
+        Ok((self.buckets[new_entropy - 1].len() - 1, moved_opt))
     }
 
     /// Remove the cell at the given entropy and bucket_index.
@@ -429,7 +452,7 @@ mod tests {
             assert!(queue.is_empty());
             assert_eq!(moved, Ok(None));
 
-            // Access a no longer existing index
+            // Access a not existing index
             let moved = queue.remove_cell(3, 0);
             assert!(queue.is_empty());
             assert_eq!(
@@ -440,15 +463,41 @@ mod tests {
                 })
             );
 
-            // Access a not existing entropy aka a non existing bucket
+            // Access a not existing entropy
             let moved = queue.remove_cell(4, 0);
             assert!(queue.is_empty());
             assert_eq!(moved, Err(BucketQueueError::InvalidEntropy { entropy: 4 }));
         }
-    }
 
-    #[test]
-    fn move_cell_works() {
-        // TODO add also error handling for the move cell method
+        #[test]
+        fn move_cell_works() {
+            let mut queue = BucketQueue::initialize([p!(0, 0), p!(1, 0), p!(2, 0)], 3);
+
+            // move last in bucket
+            let result = queue.move_cell(3, 2, 1);
+            assert_eq!(result, Ok((0, None)));
+
+            // move not last in bucket
+            let result = queue.move_cell(3, 0, 1);
+            assert_eq!(result, Ok((1, Some((p!(1, 0), 0)))));
+
+            // access not existing index
+            let result = queue.move_cell(3, 2, 1);
+            assert_eq!(
+                result,
+                Err(BucketQueueError::InvalidBucketIndex {
+                    entropy: 3,
+                    bucket_index: 2
+                })
+            );
+
+            // access not existing old entropy
+            let result = queue.move_cell(4, 2, 1);
+            assert_eq!(result, Err(BucketQueueError::InvalidEntropy { entropy: 4 }));
+
+            // access not existing new entropy
+            let result = queue.move_cell(3, 2, 5);
+            assert_eq!(result, Err(BucketQueueError::InvalidEntropy { entropy: 5 }));
+        }
     }
 }
