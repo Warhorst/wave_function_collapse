@@ -317,14 +317,14 @@ impl<'a> Default for PossibleIndices<'a> {
 }
 
 impl<'a> PossibleIndices<'a> {
-    fn from_array(
+    pub (crate) fn from_array(
         indices: &'a [u8],
         entropy: u8,
     ) -> Self {
         PossibleIndices::Array { indices, entropy }
     }
 
-    fn from_bitarray(
+    pub (crate) fn from_bitarray(
         array: BitArray<u128>,
         entropy: u8,
     ) -> Self {

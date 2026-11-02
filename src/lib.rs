@@ -5,11 +5,11 @@ use crate::{
     cell::{Cell, PossibleIndices},
     constraints::{Constraint, Constraints},
     prob_mod::{ProbabilityModifier, ProbabilityModifiers},
-    random::Random,
+    random::{Random, Seed},
     tile_filter::{TileFilter, TileFilters},
 };
 use pad::{p, position::Position};
-use std::{fmt::Debug, hash::Hash, marker::PhantomData};
+use std::{fmt::Debug, marker::PhantomData};
 use thiserror::Error;
 
 pub mod board;
@@ -197,9 +197,8 @@ where
             .collect())
     }
 
-    /// Return the [`Debug`] representation of the seed used for this [`Wfc`].
-    /// Might be usable for debugging.
-    pub fn seed(&self) -> impl Debug {
+    /// Return the [`Seed`] used for this [`Wfc`].
+    pub fn seed(&self) -> &dyn Seed {
         self.random.seed()
     }
 
@@ -237,10 +236,10 @@ impl<T, C: Cell> WfcBuilder<T, C>
 where
     T: Clone,
 {
-    /// Set a custom seed for the [`Wfc`]
+    /// Set a custom [`Seed`] for the [`Wfc`]
     pub fn with_seed(
         mut self,
-        seed: impl Hash + Debug + 'static,
+        seed: impl Seed + 'static,
     ) -> Self {
         self.random = Random::from_seed(seed);
         self
@@ -293,6 +292,7 @@ where
 
     /// Validate the input and create a [`Wfc`].
     pub fn build(mut self) -> Result<Wfc<T, C>, WfcError> {
+        // TODO add check for < 0, NaN weights and sum = 0
         if self.weights.len() != self.tiles.len() {
             return Err(WfcError::InvalidWeightAmount {
                 expected: self.tiles.len(),
