@@ -292,13 +292,7 @@ where
 
     /// Validate the input and create a [`Wfc`].
     pub fn build(mut self) -> Result<Wfc<T, C>, WfcError> {
-        // TODO add check for < 0, NaN weights and sum = 0
-        if self.weights.len() != self.tiles.len() {
-            return Err(WfcError::InvalidWeightAmount {
-                expected: self.tiles.len(),
-                was: self.weights.len(),
-            });
-        }
+        self.validate_weights()?;
 
         let mut board = Board::<C>::new(self.width, self.height, self.tiles.len());
 
@@ -321,19 +315,53 @@ where
             self.random,
         ))
     }
+
+    fn validate_weights(&self) -> Result<(), WeightsError> {
+        if self.weights.len() != self.tiles.len() {
+            return Err(WeightsError::InvalidAmount {
+                expected: self.tiles.len(),
+                was: self.weights.len(),
+            });
+        }
+
+        if self.weights.iter().any(|w| *w < 0.0) {
+            return Err(WeightsError::WeightLowerZero);
+        }
+
+        if self.weights.contains(&f32::NAN) {
+            return Err(WeightsError::WeightNaN);
+        }
+
+        if self.weights.iter().all(|w| *w == 0.0) {
+            return Err(WeightsError::AllZero);
+        }
+
+        Ok(())
+    }
 }
 
 /// An error for the wave function collapse, which occurs due to configuration errors
 /// or runtime errors.
 #[derive(Debug, Error)]
 pub enum WfcError {
-    /// A different amount of weights was set in the WFC than expected.
-    #[error("{expected} weights were expected, but {was} were provided!")]
-    InvalidWeightAmount { expected: usize, was: usize },
     #[error("The position {0:?} is already collapsed.")]
     PositionAlreadyCollapsed(Position),
     #[error("The index {0} is not a valid choice for position {1:?}")]
     InvalidTileIndex(usize, Position),
     #[error("{0}")]
+    WeightsError(#[from] WeightsError),
+    #[error("{0}")]
     BoardError(#[from] BoardError),
+}
+
+#[derive(Debug, Error, Eq, PartialEq)]
+pub enum WeightsError {
+    #[error("{expected} weights were expected, but {was} were provided.")]
+    InvalidAmount { expected: usize, was: usize },
+    #[error("One of the provided weights is lower than 0.")]
+    WeightLowerZero,
+    #[error("One of the provided weights is NaN.")]
+    WeightNaN,
+    #[error("The sum of all weights is 0.")]
+    AllZero,
 }
