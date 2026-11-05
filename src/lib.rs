@@ -328,7 +328,7 @@ where
             return Err(WeightsError::WeightLowerZero);
         }
 
-        if self.weights.contains(&f32::NAN) {
+        if self.weights.iter().any(|w| w.is_nan()) {
             return Err(WeightsError::WeightNaN);
         }
 
@@ -342,7 +342,7 @@ where
 
 /// An error for the wave function collapse, which occurs due to configuration errors
 /// or runtime errors.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Eq, PartialEq)]
 pub enum WfcError {
     #[error("The position {0:?} is already collapsed.")]
     PositionAlreadyCollapsed(Position),
